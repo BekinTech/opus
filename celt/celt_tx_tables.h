@@ -116,6 +116,13 @@ extern const float celt_tx_mdct_exp_512[512];
 extern const opus_int16 celt_tx_mdct_map_1024[1024];
 extern const float celt_tx_mdct_exp_1024[1024];
 
+extern const opus_int16 celt_tx_bridge_map_16[16];
+extern const opus_int16 celt_tx_bridge_map_32[32];
+extern const opus_int16 celt_tx_bridge_map_64[64];
+extern const opus_int16 celt_tx_bridge_map_128[128];
+extern const opus_int16 celt_tx_bridge_map_256[256];
+extern const opus_int16 celt_tx_bridge_map_512[512];
+
 /* FFT Twiddle Tables from assembly */
 
 extern const float celt_tx_tab_53_float[12];

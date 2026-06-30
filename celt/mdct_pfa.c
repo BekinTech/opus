@@ -100,12 +100,23 @@ struct OpusTXContext {
    void *tmp;
    const struct OpusTXContext *sub;
    void *fn;
+   const opus_int16 *bridge_map;
 };
 
 #include <stddef.h>
 #include <stdio.h>
 #include <math.h>
 #include "celt_tx_tables.h"
+static inline int split_radix_permutation(int i, int len, int inv)
+{
+    len >>= 1;
+    if (len <= 1)
+        return i & 1;
+    if (!(i & len))
+        return split_radix_permutation(i, len, inv) * 2;
+    len >>= 1;
+    return split_radix_permutation(i, len, inv) * 4 + 1 - 2*(!(i & len) ^ inv);
+}
 
 static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, void *in, ptrdiff_t stride ARG_FIXED(int downshift));
 static void get_pfa_crt_params(int M, int *K3, int *K4);
@@ -160,6 +171,200 @@ static OPUS_INLINE cpx get_p2_twiddle(int N, int j) {
 #endif
    return w;
 }
+
+#ifndef FIXED_POINT
+#define BF(x, y, a, b)  \
+    do {                \
+        x = (a) - (b);  \
+        y = (a) + (b);  \
+    } while (0)
+
+#define CMUL(dre, dim, are, aim, bre, bim)      \
+    do {                                        \
+        (dre) = (are) * (bre) - (aim) * (bim);  \
+        (dim) = (are) * (bim) + (aim) * (bre);  \
+    } while (0)
+
+#define SMUL(dre, dim, are, aim, bre, bim)      \
+    do {                                        \
+        (dre) = (are) * (bre) - (aim) * (bim);  \
+        (dim) = (are) * (bim) - (aim) * (bre);  \
+    } while (0)
+
+#define BUTTERFLIES(a0, a1, a2, a3)            \
+    do {                                       \
+        r0=a0.r;                               \
+        i0=a0.i;                               \
+        r1=a1.r;                               \
+        i1=a1.i;                               \
+        BF(t3, t5, t5, t1);                    \
+        BF(a2.r, a0.r, r0, t5);                \
+        BF(a3.i, a1.i, i1, t3);                \
+        BF(t4, t6, t2, t6);                    \
+        BF(a3.r, a1.r, r1, t4);                \
+        BF(a2.i, a0.i, i0, t6);                \
+    } while (0)
+
+#define TRANSFORM(a0, a1, a2, a3, wre, wim)    \
+    do {                                       \
+        CMUL(t1, t2, a2.r, a2.i, wre, -wim);   \
+        CMUL(t5, t6, a3.r, a3.i, wre,  wim);   \
+        BUTTERFLIES(a0, a1, a2, a3);           \
+    } while (0)
+
+static inline void celt_tx_fft_sr_combine_float(cpx *z, const float *cos, int len)
+{
+    int o1 = 2*len;
+    int o2 = 4*len;
+    int o3 = 6*len;
+    const float *wim = cos + o1 - 7;
+    float t1, t2, t3, t4, t5, t6, r0, i0, r1, i1;
+    int i;
+
+    for (i = 0; i < len; i += 4) {
+        TRANSFORM(z[0], z[o1 + 0], z[o2 + 0], z[o3 + 0], cos[0], wim[7]);
+        TRANSFORM(z[2], z[o1 + 2], z[o2 + 2], z[o3 + 2], cos[2], wim[5]);
+        TRANSFORM(z[4], z[o1 + 4], z[o2 + 4], z[o3 + 4], cos[4], wim[3]);
+        TRANSFORM(z[6], z[o1 + 6], z[o2 + 6], z[o3 + 6], cos[6], wim[1]);
+
+        TRANSFORM(z[1], z[o1 + 1], z[o2 + 1], z[o3 + 1], cos[1], wim[6]);
+        TRANSFORM(z[3], z[o1 + 3], z[o2 + 3], z[o3 + 3], cos[3], wim[4]);
+        TRANSFORM(z[5], z[o1 + 5], z[o2 + 5], z[o3 + 5], cos[5], wim[2]);
+        TRANSFORM(z[7], z[o1 + 7], z[o2 + 7], z[o3 + 7], cos[7], wim[0]);
+
+        z   += 2*4;
+        cos += 2*4;
+        wim -= 2*4;
+    }
+}
+
+static void celt_tx_fft2_float(cpx *dst, const cpx *src)
+{
+    cpx tmp;
+    BF(tmp.r, dst[0].r, src[0].r, src[1].r);
+    BF(tmp.i, dst[0].i, src[0].i, src[1].i);
+    dst[1] = tmp;
+}
+
+static void celt_tx_fft4_float(cpx *dst, const cpx *src)
+{
+    float t1, t2, t3, t4, t5, t6, t7, t8;
+
+    BF(t3, t1, src[0].r, src[1].r);
+    BF(t8, t6, src[3].r, src[2].r);
+    BF(dst[2].r, dst[0].r, t1, t6);
+    BF(t4, t2, src[0].i, src[1].i);
+    BF(t7, t5, src[2].i, src[3].i);
+    BF(dst[3].i, dst[1].i, t4, t8);
+    BF(dst[3].r, dst[1].r, t3, t7);
+    BF(dst[2].i, dst[0].i, t2, t5);
+}
+
+static void celt_tx_fft8_float(cpx *dst, const cpx *src)
+{
+    float t1, t2, t3, t4, t5, t6, r0, i0, r1, i1;
+    const float cos = 0.7071067812f; /* cos(pi/4) */
+
+    celt_tx_fft4_float(dst, src);
+
+    BF(t1, dst[5].r, src[4].r, -src[5].r);
+    BF(t2, dst[5].i, src[4].i, -src[5].i);
+    BF(t5, dst[7].r, src[6].r, -src[7].r);
+    BF(t6, dst[7].i, src[6].i, -src[7].i);
+
+    BUTTERFLIES(dst[0], dst[2], dst[4], dst[6]);
+    TRANSFORM(dst[1], dst[3], dst[5], dst[7], cos, cos);
+}
+
+static void celt_tx_fft16_float(cpx *dst, const cpx *src)
+{
+    float t1, t2, t3, t4, t5, t6, r0, i0, r1, i1;
+    float cos_16_1 = 0.9238795325f; /* cos(pi/8) */
+    float cos_16_2 = 0.7071067812f; /* cos(2*pi/8) */
+    float cos_16_3 = 0.3826834324f; /* cos(3*pi/8) */
+
+    celt_tx_fft8_float(dst +  0, src +  0);
+    celt_tx_fft4_float(dst +  8, src +  8);
+    celt_tx_fft4_float(dst + 12, src + 12);
+
+    t1 = dst[ 8].r;
+    t2 = dst[ 8].i;
+    t5 = dst[12].r;
+    t6 = dst[12].i;
+    BUTTERFLIES(dst[0], dst[4], dst[8], dst[12]);
+
+    TRANSFORM(dst[ 2], dst[ 6], dst[10], dst[14], cos_16_2, cos_16_2);
+    TRANSFORM(dst[ 1], dst[ 5], dst[ 9], dst[13], cos_16_1, cos_16_3);
+    TRANSFORM(dst[ 3], dst[ 7], dst[11], dst[15], cos_16_3, cos_16_1);
+}
+
+static void celt_tx_fft32_float(cpx *dst, const cpx *src)
+{
+    const float *cos = celt_tx_tab_32_float;
+    celt_tx_fft16_float(dst, src);
+    celt_tx_fft8_float(dst + 16, src + 16);
+    celt_tx_fft8_float(dst + 24, src + 24);
+    celt_tx_fft_sr_combine_float(dst, cos, 4);
+}
+
+static void celt_tx_fft64_float(cpx *dst, const cpx *src)
+{
+    const float *cos = celt_tx_tab_64_float;
+    celt_tx_fft32_float(dst, src);
+    celt_tx_fft16_float(dst + 32, src + 32);
+    celt_tx_fft16_float(dst + 48, src + 48);
+    celt_tx_fft_sr_combine_float(dst, cos, 8);
+}
+
+static void celt_tx_fft128_float(cpx *dst, const cpx *src)
+{
+    const float *cos = celt_tx_tab_128_float;
+    celt_tx_fft64_float(dst, src);
+    celt_tx_fft32_float(dst + 64, src + 64);
+    celt_tx_fft32_float(dst + 96, src + 96);
+    celt_tx_fft_sr_combine_float(dst, cos, 16);
+}
+
+static void celt_tx_fft256_float(cpx *dst, const cpx *src)
+{
+    const float *cos = celt_tx_tab_256_float;
+    celt_tx_fft128_float(dst, src);
+    celt_tx_fft64_float(dst + 128, src + 128);
+    celt_tx_fft64_float(dst + 192, src + 192);
+    celt_tx_fft_sr_combine_float(dst, cos, 32);
+}
+
+static void celt_tx_fft512_float(cpx *dst, const cpx *src)
+{
+    const float *cos = celt_tx_tab_512_float;
+    celt_tx_fft256_float(dst, src);
+    celt_tx_fft128_float(dst + 256, src + 256);
+    celt_tx_fft128_float(dst + 384, src + 384);
+    celt_tx_fft_sr_combine_float(dst, cos, 64);
+}
+
+static void celt_tx_fft_sr_c(cpx *dst, const cpx *src, int N)
+{
+   switch (N) {
+      case   2: celt_tx_fft2_float(dst, src); break;
+      case   4: celt_tx_fft4_float(dst, src); break;
+      case   8: celt_tx_fft8_float(dst, src); break;
+      case  16: celt_tx_fft16_float(dst, src); break;
+      case  32: celt_tx_fft32_float(dst, src); break;
+      case  64: celt_tx_fft64_float(dst, src); break;
+      case 128: celt_tx_fft128_float(dst, src); break;
+      case 256: celt_tx_fft256_float(dst, src); break;
+      case 512: celt_tx_fft512_float(dst, src); break;
+      default: celt_assert2(0, "Unsupported Split-Radix FFT size");
+   }
+}
+
+#undef BF
+#undef CMUL
+#undef SMUL
+#undef BUTTERFLIES
+#undef TRANSFORM
+#endif /* !FIXED_POINT */
 
 static void celt_tx_fft_p2_c(cpx *out, const cpx *in, int N ARG_FIXED(int *downshift_ptr)) {
    int i, j, len, half_len;
@@ -333,7 +538,16 @@ static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, 
       celt_tx_fft_p2_c(tmp + j * M, tmp + j * M, M ARG_FIXED(&sub_shift));
       if (j == 14) downshift = sub_shift;
 #else
-      celt_tx_fft_p2_c(tmp + j * M, tmp + j * M, M);
+      cpx row_temp[64];
+      int k;
+      for (k = 0; k < M; k++) {
+         int perm = -split_radix_permutation(k, M, 0) & (M - 1);
+         row_temp[k] = tmp[j * M + perm];
+      }
+      celt_tx_fft_sr_c(row_temp, row_temp, M);
+      for (k = 0; k < M; k++) {
+         tmp[j * M + k] = row_temp[k];
+      }
 #endif
    }
 
@@ -342,28 +556,44 @@ static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, 
    }
 }
 
-static const struct OpusTXContext celt_tx_p2_4_c   = {  4, 1, celt_tx_p2_map_4,  NULL, NULL, NULL, NULL };
-static const struct OpusTXContext celt_tx_p2_8_c   = {  8, 1, celt_tx_p2_map_8,  NULL, NULL, NULL, NULL };
-static const struct OpusTXContext celt_tx_p2_16_c  = { 16, 1, celt_tx_p2_map_16, NULL, NULL, NULL, NULL };
-static const struct OpusTXContext celt_tx_p2_32_c  = { 32, 1, celt_tx_p2_map_32, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_p2_4_c   = {  4, 1, celt_tx_p2_map_4,  NULL, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_p2_8_c   = {  8, 1, celt_tx_p2_map_8,  NULL, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_p2_16_c  = { 16, 1, celt_tx_p2_map_16, NULL, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_p2_32_c  = { 32, 1, celt_tx_p2_map_32, NULL, NULL, NULL, NULL, NULL };
 #if defined(ENABLE_QEXT)
-static const struct OpusTXContext celt_tx_p2_64_c  = { 64, 1, celt_tx_p2_map_64, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_p2_64_c  = { 64, 1, celt_tx_p2_map_64, NULL, NULL, NULL, NULL, NULL };
 #endif
 
-static const struct OpusTXContext celt_tx_pfa_60_c  = {  60, 1, celt_tx_pfa_map_60,  NULL, NULL, &celt_tx_p2_4_c,  NULL };
-static const struct OpusTXContext celt_tx_pfa_120_c = { 120, 1, celt_tx_pfa_map_120, NULL, NULL, &celt_tx_p2_8_c,  NULL };
-static const struct OpusTXContext celt_tx_pfa_240_c = { 240, 1, celt_tx_pfa_map_240, NULL, NULL, &celt_tx_p2_16_c, NULL };
-static const struct OpusTXContext celt_tx_pfa_480_c = { 480, 1, celt_tx_pfa_map_480, NULL, NULL, &celt_tx_p2_32_c, NULL };
+static const struct OpusTXContext celt_tx_pfa_60_c  = {  60, 1, celt_tx_pfa_map_60,  NULL, NULL, &celt_tx_p2_4_c,  NULL, NULL };
+static const struct OpusTXContext celt_tx_pfa_120_c = { 120, 1, celt_tx_pfa_map_120, NULL, NULL, &celt_tx_p2_8_c,  NULL, NULL };
+static const struct OpusTXContext celt_tx_pfa_240_c = { 240, 1, celt_tx_pfa_map_240, NULL, NULL, &celt_tx_p2_16_c, NULL, NULL };
+static const struct OpusTXContext celt_tx_pfa_480_c = { 480, 1, celt_tx_pfa_map_480, NULL, NULL, &celt_tx_p2_32_c, NULL, NULL };
 #if defined(ENABLE_QEXT)
-static const struct OpusTXContext celt_tx_pfa_960_c = { 960, 1, celt_tx_pfa_map_960, NULL, NULL, &celt_tx_p2_64_c, NULL };
+static const struct OpusTXContext celt_tx_pfa_960_c = { 960, 1, celt_tx_pfa_map_960, NULL, NULL, &celt_tx_p2_64_c, NULL, NULL };
 #endif
 
-static const struct OpusTXContext celt_tx_mdct_120_c  = {  120, 1, celt_tx_mdct_map_120,  (const void *)celt_tx_mdct_exp_120,  NULL, &celt_tx_pfa_60_c,  (void *)celt_tx_fft_pfa_15xM_ns_c };
-static const struct OpusTXContext celt_tx_mdct_240_c  = {  240, 1, celt_tx_mdct_map_240,  (const void *)celt_tx_mdct_exp_240,  NULL, &celt_tx_pfa_120_c, (void *)celt_tx_fft_pfa_15xM_ns_c };
-static const struct OpusTXContext celt_tx_mdct_480_c  = {  480, 1, celt_tx_mdct_map_480,  (const void *)celt_tx_mdct_exp_480,  NULL, &celt_tx_pfa_240_c, (void *)celt_tx_fft_pfa_15xM_ns_c };
-static const struct OpusTXContext celt_tx_mdct_960_c  = {  960, 1, celt_tx_mdct_map_960,  (const void *)celt_tx_mdct_exp_960,  NULL, &celt_tx_pfa_480_c, (void *)celt_tx_fft_pfa_15xM_ns_c };
+static const struct OpusTXContext celt_tx_mdct_120_c  = {  120, 1, celt_tx_mdct_map_120,  (const void *)celt_tx_mdct_exp_120,  NULL, &celt_tx_pfa_60_c,  (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_240_c  = {  240, 1, celt_tx_mdct_map_240,  (const void *)celt_tx_mdct_exp_240,  NULL, &celt_tx_pfa_120_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_480_c  = {  480, 1, celt_tx_mdct_map_480,  (const void *)celt_tx_mdct_exp_480,  NULL, &celt_tx_pfa_240_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_960_c  = {  960, 1, celt_tx_mdct_map_960,  (const void *)celt_tx_mdct_exp_960,  NULL, &celt_tx_pfa_480_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
 #if defined(ENABLE_QEXT)
-static const struct OpusTXContext celt_tx_mdct_1920_c = { 1920, 1, celt_tx_mdct_map_1920, (const void *)celt_tx_mdct_exp_1920, NULL, &celt_tx_pfa_960_c, (void *)celt_tx_fft_pfa_15xM_ns_c };
+static const struct OpusTXContext celt_tx_mdct_1920_c = { 1920, 1, celt_tx_mdct_map_1920, (const void *)celt_tx_mdct_exp_1920, NULL, &celt_tx_pfa_960_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+#endif
+
+#if defined(CUSTOM_MODES) && !defined(FIXED_POINT)
+/* Dummy sub-contexts for power-of-two sub-FFTs */
+static const struct OpusTXContext celt_tx_sr_32_c  = {  32, 1, NULL, NULL, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_sr_64_c  = {  64, 1, NULL, NULL, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_sr_128_c = { 128, 1, NULL, NULL, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_sr_256_c = { 256, 1, NULL, NULL, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_sr_512_c = { 512, 1, NULL, NULL, NULL, NULL, NULL, NULL };
+
+/* Power-of-two MDCT contexts */
+static const struct OpusTXContext celt_tx_mdct_64_c   = {   64, 1, celt_tx_mdct_map_64,   (const void *)celt_tx_mdct_exp_64,   NULL, &celt_tx_sr_32_c,  NULL, celt_tx_bridge_map_32 };
+static const struct OpusTXContext celt_tx_mdct_128_c  = {  128, 1, celt_tx_mdct_map_128,  (const void *)celt_tx_mdct_exp_128,  NULL, &celt_tx_sr_64_c,  NULL, celt_tx_bridge_map_64 };
+static const struct OpusTXContext celt_tx_mdct_256_c  = {  256, 1, celt_tx_mdct_map_256,  (const void *)celt_tx_mdct_exp_256,  NULL, &celt_tx_sr_128_c, NULL, celt_tx_bridge_map_128 };
+static const struct OpusTXContext celt_tx_mdct_512_c  = {  512, 1, celt_tx_mdct_map_512,  (const void *)celt_tx_mdct_exp_512,  NULL, &celt_tx_sr_256_c, NULL, celt_tx_bridge_map_256 };
+static const struct OpusTXContext celt_tx_mdct_1024_c = { 1024, 1, celt_tx_mdct_map_1024, (const void *)celt_tx_mdct_exp_1024, NULL, &celt_tx_sr_512_c, NULL, celt_tx_bridge_map_512 };
 #endif
 
 static const struct OpusTXContext *celt_tx_mdct_kernel_c(int len)
@@ -375,6 +605,13 @@ static const struct OpusTXContext *celt_tx_mdct_kernel_c(int len)
       case  960: return &celt_tx_mdct_960_c;
 #if defined(ENABLE_QEXT)
       case 1920: return &celt_tx_mdct_1920_c;
+#endif
+#if defined(CUSTOM_MODES) && !defined(FIXED_POINT)
+      case   64: return &celt_tx_mdct_64_c;
+      case  128: return &celt_tx_mdct_128_c;
+      case  256: return &celt_tx_mdct_256_c;
+      case  512: return &celt_tx_mdct_512_c;
+      case 1024: return &celt_tx_mdct_1024_c;
 #endif
       default:   return NULL;
    }
@@ -388,6 +625,96 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
    const kiss_twiddle_scalar *trig = (const kiss_twiddle_scalar *)s->exp;
    (void)stride;
 
+#ifndef FIXED_POINT
+   SAVE_STACK;
+   VARDECL(cpx, z_temp);
+   const kiss_fft_scalar *exp = s->exp;
+   const int len2 = N4;
+   const int len4 = N2 >> 2;
+   const opus_int16 *sub_map = s->map;
+   const kiss_fft_scalar *in1 = in;
+   const kiss_fft_scalar *in2 = in + ((len2 * 2) - 1) * stride;
+
+   /* Pre-rotation */
+   if (s->fn == (void *)celt_tx_fft_pfa_15xM_ns_c) {
+      for (i = 0; i < len2; i++) {
+         int k = sub_map[i];
+         kiss_twiddle_scalar exp_r = exp[k];
+         kiss_twiddle_scalar exp_i = exp[k + 1];
+         float re_in = in2[-k*stride];
+         float im_in = in1[k*stride];
+         z[i].r = im_in * exp_i - re_in * exp_r;
+         z[i].i = re_in * exp_i + im_in * exp_r;
+      }
+   } else {
+      for (i = 0; i < len2; i++) {
+         int k = sub_map[i];
+         kiss_twiddle_scalar exp_r = exp[k];
+         kiss_twiddle_scalar exp_i = exp[k + 1];
+         float re_in = in2[-k*stride];
+         float im_in = in1[k*stride];
+         z[i].r = re_in * exp_r - im_in * exp_i;
+         z[i].i = re_in * exp_i + im_in * exp_r;
+      }
+   }
+
+   if (s->bridge_map != NULL) {
+      ALLOC(z_temp, len2, cpx);
+      for (i = 0; i < len2; i++) {
+         z_temp[i] = z[s->bridge_map[i]];
+      }
+      for (i = 0; i < len2; i++) {
+         z[i] = z_temp[i];
+      }
+   }
+
+   /* FFT */
+   if (s->fn == (void *)celt_tx_fft_pfa_15xM_ns_c) {
+      celt_tx_fft_pfa_15xM_ns_c(s->sub, z, z, 1);
+   } else {
+      celt_tx_fft_sr_c(z, z, len2);
+   }
+
+   /* Post-rotation (reuse pre-rotation table for CELT) */
+   if (s->fn == (void *)celt_tx_fft_pfa_15xM_ns_c) {
+      /* PFA Post-rotation (standard) */
+      for (i = 0; i < len4; i++) {
+         int i0 = i;
+         int i1 = len2 - 1 - i;
+         cpx z0 = z[i0];
+         cpx z1 = z[i1];
+         kiss_twiddle_scalar e0_r = exp[2 * i0];     /* -sin */
+         kiss_twiddle_scalar e0_i = exp[2 * i0 + 1]; /*  cos */
+         kiss_twiddle_scalar e1_r = exp[2 * i1];     /* -sin */
+         kiss_twiddle_scalar e1_i = exp[2 * i1 + 1]; /*  cos */
+         float r0_r = z0.i * e0_i + z0.r * e0_r;
+         float r0_i = z0.i * e0_r - z0.r * e0_i;
+         float r1_r = z1.i * e1_i + z1.r * e1_r;
+         float r1_i = z1.i * e1_r - z1.r * e1_i;
+         z[i0] = (cpx){r0_r, r1_i};
+         z[i1] = (cpx){r1_r, r0_i};
+      }
+   } else {
+      /* Power-of-two Post-rotation */
+      for (i = 0; i < len4; i++) {
+         const int i0 = len4 + i;
+         const int i1 = len4 - i - 1;
+         cpx src1 = (cpx){ z[i1].i, z[i1].r };
+         cpx src0 = (cpx){ z[i0].i, z[i0].r };
+         kiss_twiddle_scalar exp1_r = exp[2 * i1];
+         kiss_twiddle_scalar exp1_i = exp[2 * i1 + 1];
+         kiss_twiddle_scalar exp0_r = exp[2 * i0];
+         kiss_twiddle_scalar exp0_i = exp[2 * i0 + 1];
+
+         z[i1].r = src1.r * exp1_i - src1.i * exp1_r;
+         z[i0].i = src1.r * exp1_r + src1.i * exp1_i;
+
+         z[i0].r = src0.r * exp0_i - src0.i * exp0_r;
+         z[i1].i = src0.r * exp0_r + src0.i * exp0_i;
+      }
+   }
+   RESTORE_STACK;
+#else
    for (i = 0; i < N4; i++) {
       int k = s->map[i];
       int j = k >> 1;
@@ -395,45 +722,35 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
       kiss_fft_scalar re = in[(N2 - 1 - k) * stride];
       kiss_twiddle_scalar trig_r = trig[2 * j];     /* -sin(theta_j) */
       kiss_twiddle_scalar trig_i = trig[2 * j + 1]; /*  cos(theta_j) */
-#ifdef FIXED_POINT
       re = SHL32_ovflw(re, pre_shift);
       im = SHL32_ovflw(im, pre_shift);
       z[i].r = SUB32_ovflw(S_MUL(im, trig_i), S_MUL(re, trig_r));
       z[i].i = ADD32_ovflw(S_MUL(re, trig_i), S_MUL(im, trig_r));
-#else
-      z[i] = (cpx){im * trig_i - re * trig_r, re * trig_i + im * trig_r};
-#endif
    }
 
    if (s->fn == (void *)celt_tx_fft_pfa_15xM_ns_c) {
       celt_tx_fft_pfa_15xM_ns_c(s->sub, z, z, 1 ARG_FIXED(fft_shift));
+      /* PFA Post-rotation (standard) */
+      for (i = 0; i < N4 / 2; i++) {
+         int i0 = i;
+         int i1 = N4 - 1 - i;
+         cpx z0 = z[i0];
+         cpx z1 = z[i1];
+         kiss_twiddle_scalar e0_r = trig[2 * i0];     /* -sin */
+         kiss_twiddle_scalar e0_i = trig[2 * i0 + 1]; /*  cos */
+         kiss_twiddle_scalar e1_r = trig[2 * i1];     /* -sin */
+         kiss_twiddle_scalar e1_i = trig[2 * i1 + 1]; /*  cos */
+         kiss_fft_scalar r0_r = PSHR32_ovflw(ADD32_ovflw(S_MUL(z0.i, e0_i), S_MUL(z0.r, e0_r)), post_shift);
+         kiss_fft_scalar r0_i = PSHR32_ovflw(SUB32_ovflw(S_MUL(z0.i, e0_r), S_MUL(z0.r, e0_i)), post_shift);
+         kiss_fft_scalar r1_r = PSHR32_ovflw(ADD32_ovflw(S_MUL(z1.i, e1_i), S_MUL(z1.r, e1_r)), post_shift);
+         kiss_fft_scalar r1_i = PSHR32_ovflw(SUB32_ovflw(S_MUL(z1.i, e1_r), S_MUL(z1.r, e1_i)), post_shift);
+         z[i0] = (cpx){r0_r, r1_i};
+         z[i1] = (cpx){r1_r, r0_i};
+      }
    } else {
-      celt_tx_fft_p2_c(z, z, N4 ARG_FIXED(&fft_shift));
+      celt_assert2(0, "Power-of-two MDCT called in fixed point");
    }
-
-   for (i = 0; i < N4 / 2; i++) {
-      int i0 = i;
-      int i1 = N4 - 1 - i;
-      cpx z0 = z[i0];
-      cpx z1 = z[i1];
-      kiss_twiddle_scalar e0_r = trig[2 * i0];     /* -sin */
-      kiss_twiddle_scalar e0_i = trig[2 * i0 + 1]; /*  cos */
-      kiss_twiddle_scalar e1_r = trig[2 * i1];     /* -sin */
-      kiss_twiddle_scalar e1_i = trig[2 * i1 + 1]; /*  cos */
-#ifdef FIXED_POINT
-      kiss_fft_scalar r0_r = PSHR32_ovflw(ADD32_ovflw(S_MUL(z0.i, e0_i), S_MUL(z0.r, e0_r)), post_shift);
-      kiss_fft_scalar r0_i = PSHR32_ovflw(SUB32_ovflw(S_MUL(z0.i, e0_r), S_MUL(z0.r, e0_i)), post_shift);
-      kiss_fft_scalar r1_r = PSHR32_ovflw(ADD32_ovflw(S_MUL(z1.i, e1_i), S_MUL(z1.r, e1_r)), post_shift);
-      kiss_fft_scalar r1_i = PSHR32_ovflw(SUB32_ovflw(S_MUL(z1.i, e1_r), S_MUL(z1.r, e1_i)), post_shift);
-      z[i0] = (cpx){r0_r, r1_i};
-      z[i1] = (cpx){r1_r, r0_i};
-#else
-      cpx r0 = (cpx){z0.i * e0_i + z0.r * e0_r, z0.i * e0_r - z0.r * e0_i};
-      cpx r1 = (cpx){z1.i * e1_i + z1.r * e1_r, z1.i * e1_r - z1.r * e1_i};
-      z[i0] = (cpx){r0.r, r1.i};
-      z[i1] = (cpx){r1.r, r0.i};
 #endif
-   }
 }
 
 void clt_mdct_backward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
@@ -445,7 +762,6 @@ void clt_mdct_backward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
    int N = l->n >> shift;
    int N2 = N >> 1;
    const struct OpusTXContext *tpl = celt_tx_mdct_kernel_c(N2);
-   (void)arch;
 
    if (tpl == NULL) {
 #if defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API)
@@ -493,12 +809,18 @@ void clt_mdct_backward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
       struct OpusTXContext pfa = *tpl->sub;
       pfa.tmp = tmp;
       mdct.sub = &pfa;
+#ifdef FIXED_POINT
       mdct.exp = trig;
+#endif
       celt_tx_mdct_inv_c(&mdct, out + (overlap >> 1), in, stride ARG_FIXED(pre_shift) ARG_FIXED(fft_shift) ARG_FIXED(post_shift));
    } else {
+#ifdef FIXED_POINT
       struct OpusTXContext mdct = *tpl;
       mdct.exp = trig;
       celt_tx_mdct_inv_c(&mdct, out + (overlap >> 1), in, stride ARG_FIXED(pre_shift) ARG_FIXED(fft_shift) ARG_FIXED(post_shift));
+#else
+      celt_tx_mdct_inv_c(tpl, out + (overlap >> 1), in, stride ARG_FIXED(pre_shift) ARG_FIXED(fft_shift) ARG_FIXED(post_shift));
+#endif
    }
 
    {
@@ -601,30 +923,58 @@ static void celt_tx_mdct_fwd_c(const struct OpusTXContext *s, kiss_fft_scalar *o
 #endif
    if (s->fn == (void *)celt_tx_fft_pfa_15xM_ns_c) {
       celt_tx_fft_pfa_15xM_ns_c(s->sub, z, z, 1 ARG_FIXED(fft_shift));
-   } else {
-      celt_tx_fft_p2_c(z, z, N4 ARG_FIXED(&fft_shift));
-   }
-
-   /* Post-rotation */
-   for (i = 0; i < N4; i++) {
-      kiss_twiddle_scalar t0 = trig[2 * i];      /* -sin */
-      kiss_twiddle_scalar t1 = trig[2 * i + 1];  /*  cos */
-      cpx fp = z[i];
-      kiss_fft_scalar fp_r = fp.r;
-      kiss_fft_scalar fp_i = fp.i;
+      /* PFA Post-rotation */
+      for (i = 0; i < N4; i++) {
+         kiss_twiddle_scalar t0 = trig[2 * i];      /* -sin */
+         kiss_twiddle_scalar t1 = trig[2 * i + 1];  /*  cos */
+         cpx fp = z[i];
+         kiss_fft_scalar fp_r = fp.r;
+         kiss_fft_scalar fp_i = fp.i;
 #ifdef FIXED_POINT
 #ifdef ENABLE_QEXT
-      t0 = S_MUL2(t0, scale);
-      t1 = S_MUL2(t1, scale);
+         t0 = S_MUL2(t0, scale);
+         t1 = S_MUL2(t1, scale);
 #endif
-      kiss_fft_scalar yr = PSHR32(SUB32_ovflw(S_MUL(fp_i, t0), S_MUL(fp_r, t1)), headroom);
-      kiss_fft_scalar yi = PSHR32(ADD32_ovflw(S_MUL(fp_r, t0), S_MUL(fp_i, t1)), headroom);
+         kiss_fft_scalar yr = PSHR32(SUB32_ovflw(S_MUL(fp_i, t0), S_MUL(fp_r, t1)), headroom);
+         kiss_fft_scalar yi = PSHR32(ADD32_ovflw(S_MUL(fp_r, t0), S_MUL(fp_i, t1)), headroom);
 #else
-      float yr = fp_i * t0 - fp_r * t1;
-      float yi = fp_r * t0 + fp_i * t1;
+         float yr = fp_i * t0 - fp_r * t1;
+         float yi = fp_r * t0 + fp_i * t1;
 #endif
-      out[2 * i * stride] = yr;
-      out[(N2 - 1 - 2 * i) * stride] = yi;
+         out[2 * i * stride] = yr;
+         out[(N2 - 1 - 2 * i) * stride] = yi;
+      }
+   } else {
+#ifndef FIXED_POINT
+      {
+         VARDECL(cpx, z_temp);
+         if (s->bridge_map != NULL) {
+            ALLOC(z_temp, N4, cpx);
+            for (i = 0; i < N4; i++) {
+               z_temp[i] = z[s->bridge_map[i]];
+            }
+            for (i = 0; i < N4; i++) {
+               z[i] = z_temp[i];
+            }
+         }
+      }
+      celt_tx_fft_sr_c(z, z, N4);
+      /* Power-of-two Post-rotation (reversed input, NO conjugated output) */
+      for (i = 0; i < N4; i++) {
+         kiss_twiddle_scalar t0 = trig[2 * i];      /* -sin */
+         kiss_twiddle_scalar t1 = trig[2 * i + 1];  /*  cos */
+         int idx = i == 0 ? 0 : N4 - i;
+         cpx fp = z[idx];
+         float fp_r = fp.r;
+         float fp_i = fp.i;
+         float yr = fp_i * t0 - fp_r * t1;
+         float yi = fp_r * t0 + fp_i * t1;
+         out[2 * i * stride] = yr;
+         out[(N2 - 1 - 2 * i) * stride] = yi;
+      }
+#else
+      celt_assert2(0, "Power-of-two MDCT called in fixed point");
+#endif
    }
    RESTORE_STACK;
 }

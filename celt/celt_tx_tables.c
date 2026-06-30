@@ -1725,7 +1725,7 @@ const float celt_tx_mdct_exp_1024[1024] = {
 };
 
 
-#if !defined(__aarch64__) || defined(FIXED_POINT)
+#if 1
 /* FFT Twiddle Tables from assembly */
 
 const float celt_tx_tab_53_float[12] = {

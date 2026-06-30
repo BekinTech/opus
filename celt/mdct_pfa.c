@@ -366,14 +366,10 @@ static void celt_tx_fft_sr_c(cpx *dst, const cpx *src, int N)
 #undef TRANSFORM
 #endif /* !FIXED_POINT */
 
+#ifdef FIXED_POINT
 static void celt_tx_fft_p2_c(cpx *out, const cpx *in, int N ARG_FIXED(int *downshift_ptr)) {
    int i, j, len, half_len;
    int log2N;
-#ifndef FIXED_POINT
-   int downshift_val = 0;
-   int *downshift_ptr = &downshift_val;
-   (void)downshift_ptr;
-#endif
    SAVE_STACK;
    VARDECL(cpx, buf);
    ALLOC(buf, N, cpx);
@@ -412,6 +408,7 @@ static void celt_tx_fft_p2_c(cpx *out, const cpx *in, int N ARG_FIXED(int *downs
    for (i = 0; i < N; i++) out[i] = buf[i];
    RESTORE_STACK;
 }
+#endif
 
 /*
  * 15-point Good-Thomas Prime Factor Algorithm (PFA) DFT core.
@@ -622,7 +619,7 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
    int N2 = s->len;
    int N4 = N2 >> 1;
    cpx *z = (cpx *)out;
-   const kiss_twiddle_scalar *trig = (const kiss_twiddle_scalar *)s->exp;
+
    (void)stride;
 
 #ifndef FIXED_POINT
@@ -715,6 +712,7 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
    }
    RESTORE_STACK;
 #else
+   const kiss_twiddle_scalar *trig = (const kiss_twiddle_scalar *)s->exp;
    for (i = 0; i < N4; i++) {
       int k = s->map[i];
       int j = k >> 1;
@@ -1088,9 +1086,8 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
    pfa = *tpl;
    pfa.tmp = tmp;
 
-   int downshift = 0;
 #ifdef FIXED_POINT
-   downshift = st->scale_shift - 1;
+   int downshift = st->scale_shift - 1;
 #endif
    celt_tx_fft_pfa_15xM_ns_c(&pfa, fout, in_perm, 1 ARG_FIXED(downshift));
 

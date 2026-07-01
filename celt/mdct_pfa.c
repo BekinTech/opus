@@ -477,7 +477,14 @@ static void celt_tx_fft_p2_c(cpx *out, const cpx *in, int N ARG_FIXED(int *downs
          half_len = len >> 1;
          PFA_DOWNSHIFT(buf, N, downshift_ptr, 1);
          for (i = 0; i < N; i += len) {
-            for (j = 0; j < half_len; j++) {
+            /* j = 0: twiddle (1, 0) -- no multiplication, exact precision */
+            {
+               cpx u = buf[i];
+               cpx v = buf[i + half_len];
+               C_ADD(buf[i], u, v);
+               C_SUB(buf[i + half_len], u, v);
+            }
+            for (j = 1; j < half_len; j++) {
 # ifdef ENABLE_QEXT
                cpx w = lookup_p2_twiddle_fixed32(tab, tab_N, len, j);
 # else

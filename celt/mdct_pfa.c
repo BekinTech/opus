@@ -121,116 +121,132 @@ static inline int split_radix_permutation(int i, int len, int inv)
     return split_radix_permutation(i, len, inv) * 4 + 1 - 2*(!(i & len) ^ inv);
 }
 
+static OPUS_INLINE int sr_perm_map(int k, int M) {
+   static const opus_int16 p4[4]   = { 0, 2, 1, 3 };
+   static const opus_int16 p8[8]   = { 0, 4, 2, 6, 1, 5, 7, 3 };
+   static const opus_int16 p16[16] = { 0, 8, 4, 12, 2, 10, 14, 6, 1, 9, 5, 13, 15, 7, 3, 11 };
+   static const opus_int16 p32[32] = { 0, 16, 8, 24, 4, 20, 28, 12, 2, 18, 10, 26, 30, 14, 6, 22, 1, 17, 9, 25, 5, 21, 29, 13, 31, 15, 7, 23, 3, 19, 27, 11 };
+   static const opus_int16 p64[64] = { 0, 32, 16, 48, 8, 40, 56, 24, 4, 36, 20, 52, 60, 28, 12, 44, 2, 34, 18, 50, 10, 42, 58, 26, 62, 30, 14, 46, 6, 38, 54, 22, 1, 33, 17, 49, 9, 41, 57, 25, 5, 37, 21, 53, 61, 29, 13, 45, 63, 31, 15, 47, 7, 39, 55, 23, 3, 35, 19, 51, 59, 27, 11, 43 };
+   if (M == 4) return p4[k];
+   if (M == 8) return p8[k];
+   if (M == 16) return p16[k];
+   if (M == 32) return p32[k];
+   if (M == 64) return p64[k];
+   return -split_radix_permutation(k, M, 0) & (M - 1);
+}
+
 static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, void *in, ptrdiff_t stride ARG_FIXED(int downshift));
 static void get_pfa_crt_params(int M, int *K3, int *K4);
 
 
-static OPUS_INLINE cpx get_p2_twiddle(int N, int j) {
-   cpx w;
-   int tab_N;
-   int idx;
-   int quarter;
-   int half;
 #ifndef FIXED_POINT
-   const float *tab;
-   float r, i;
-
+static OPUS_INLINE const float *get_p2_twiddle_table(int N, int *tab_N_out) {
    if (N <= 32) {
-      tab = celt_tx_tab_32_float;
-      tab_N = 32;
-   } else {
-      tab_N = N;
-      if (N == 64) tab = celt_tx_tab_64_float;
-      else if (N == 128) tab = celt_tx_tab_128_float;
-      else if (N == 256) tab = celt_tx_tab_256_float;
-      else tab = celt_tx_tab_512_float;
+      *tab_N_out = 32;
+      return celt_tx_tab_32_float;
    }
+   *tab_N_out = N;
+   if (N == 64) return celt_tx_tab_64_float;
+   if (N == 128) return celt_tx_tab_128_float;
+   if (N == 256) return celt_tx_tab_256_float;
+   return celt_tx_tab_512_float;
+}
 
-   idx = j * (tab_N / N);
-   quarter = tab_N >> 2;
-   half = tab_N >> 1;
-
+static OPUS_INLINE cpx lookup_p2_twiddle_float(const float *tab, int tab_N, int N, int j) {
+   cpx w;
+   int idx = j * (tab_N / N);
+   int quarter = tab_N >> 2;
+   int half = tab_N >> 1;
    if (idx < quarter) {
-      r = tab[idx];
-      i = tab[quarter - idx];
+      w.r = tab[idx];
+      w.i = tab[quarter - idx];
    } else if (idx > quarter) {
-      r = -tab[half - idx];
-      i = tab[idx - quarter];
+      w.r = -tab[half - idx];
+      w.i = tab[idx - quarter];
    } else {
-      r = 0.0f;
-      i = 1.0f;
+      w.r = 0.0f;
+      w.i = 1.0f;
    }
-
-   w.r = r;
-   w.i = i;
+   return w;
+}
 #else /* FIXED_POINT */
 # ifdef ENABLE_QEXT
-   const opus_int32 *tab;
-   opus_int32 r, i;
-
+static OPUS_INLINE const opus_int32 *get_p2_twiddle_table(int N, int *tab_N_out) {
    if (N <= 32) {
-      tab = celt_tx_tab_32_fixed32;
-      tab_N = 32;
-   } else {
-      tab_N = N;
-      if (N == 64) tab = celt_tx_tab_64_fixed32;
-      else if (N == 128) tab = celt_tx_tab_128_fixed32;
-      else if (N == 256) tab = celt_tx_tab_256_fixed32;
-      else tab = celt_tx_tab_512_fixed32;
+      *tab_N_out = 32;
+      return celt_tx_tab_32_fixed32;
    }
+   *tab_N_out = N;
+   if (N == 64) return celt_tx_tab_64_fixed32;
+   if (N == 128) return celt_tx_tab_128_fixed32;
+   if (N == 256) return celt_tx_tab_256_fixed32;
+   return celt_tx_tab_512_fixed32;
+}
 
-   idx = j * (tab_N / N);
-   quarter = tab_N >> 2;
-   half = tab_N >> 1;
-
+static OPUS_INLINE cpx lookup_p2_twiddle_fixed32(const opus_int32 *tab, int tab_N, int N, int j) {
+   cpx w;
+   int idx = j * (tab_N / N);
+   int quarter = tab_N >> 2;
+   int half = tab_N >> 1;
    if (idx < quarter) {
-      r = tab[idx];
-      i = tab[quarter - idx];
+      w.r = tab[idx];
+      w.i = tab[quarter - idx];
    } else if (idx > quarter) {
-      r = -tab[half - idx];
-      i = tab[idx - quarter];
+      w.r = -tab[half - idx];
+      w.i = tab[idx - quarter];
    } else {
-      r = 0;
-      i = Q31ONE;
+      w.r = 0;
+      w.i = Q31ONE;
    }
-
-   w.r = r;
-   w.i = i;
-# else /* !ENABLE_QEXT */
-   const opus_int16 *tab;
-   opus_int16 r, i;
-
-   if (N <= 32) {
-      tab = celt_tx_tab_32_fixed16;
-      tab_N = 32;
-   } else {
-      tab_N = N;
-      if (N == 64) tab = celt_tx_tab_64_fixed16;
-      else if (N == 128) tab = celt_tx_tab_128_fixed16;
-      else if (N == 256) tab = celt_tx_tab_256_fixed16;
-      else tab = celt_tx_tab_512_fixed16;
-   }
-
-   idx = j * (tab_N / N);
-   quarter = tab_N >> 2;
-   half = tab_N >> 1;
-
-   if (idx < quarter) {
-      r = tab[idx];
-      i = tab[quarter - idx];
-   } else if (idx > quarter) {
-      r = -tab[half - idx];
-      i = tab[idx - quarter];
-   } else {
-      r = 0;
-      i = Q15ONE;
-   }
-
-   w.r = r;
-   w.i = i;
-# endif /* ENABLE_QEXT */
-#endif /* FIXED_POINT */
    return w;
+}
+# else /* !ENABLE_QEXT */
+static OPUS_INLINE const opus_int16 *get_p2_twiddle_table(int N, int *tab_N_out) {
+   if (N <= 32) {
+      *tab_N_out = 32;
+      return celt_tx_tab_32_fixed16;
+   }
+   *tab_N_out = N;
+   if (N == 64) return celt_tx_tab_64_fixed16;
+   if (N == 128) return celt_tx_tab_128_fixed16;
+   if (N == 256) return celt_tx_tab_256_fixed16;
+   return celt_tx_tab_512_fixed16;
+}
+
+static OPUS_INLINE cpx lookup_p2_twiddle_fixed16(const opus_int16 *tab, int tab_N, int N, int j) {
+   cpx w;
+   int idx = j * (tab_N / N);
+   int quarter = tab_N >> 2;
+   int half = tab_N >> 1;
+   if (idx < quarter) {
+      w.r = tab[idx];
+      w.i = tab[quarter - idx];
+   } else if (idx > quarter) {
+      w.r = -tab[half - idx];
+      w.i = tab[idx - quarter];
+   } else {
+      w.r = 0;
+      w.i = Q15ONE;
+   }
+   return w;
+}
+# endif
+#endif
+
+static OPUS_INLINE cpx get_p2_twiddle(int N, int j) {
+   int tab_N;
+#ifndef FIXED_POINT
+   const float *tab = get_p2_twiddle_table(N, &tab_N);
+   return lookup_p2_twiddle_float(tab, tab_N, N, j);
+#else
+# ifdef ENABLE_QEXT
+   const opus_int32 *tab = get_p2_twiddle_table(N, &tab_N);
+   return lookup_p2_twiddle_fixed32(tab, tab_N, N, j);
+# else
+   const opus_int16 *tab = get_p2_twiddle_table(N, &tab_N);
+   return lookup_p2_twiddle_fixed16(tab, tab_N, N, j);
+# endif
+#endif
 }
 
 #ifndef FIXED_POINT
@@ -450,17 +466,29 @@ static void celt_tx_fft_p2_c(cpx *out, const cpx *in, int N ARG_FIXED(int *downs
 
    /* Cooley-Tukey butterfly stages using twiddles from cosine tables */
    /* We use C_MULC to multiply by conjugate twiddles, computing DFT directly */
-   for (len = 2; len <= N; len <<= 1) {
-      half_len = len >> 1;
-      PFA_DOWNSHIFT(buf, N, downshift_ptr, 1);
-      for (i = 0; i < N; i += len) {
-         for (j = 0; j < half_len; j++) {
-            cpx w = get_p2_twiddle(len, j);
-            cpx u = buf[i + j];
-            cpx t;
-            C_MULC(t, buf[i + j + half_len], w);
-            C_ADD(buf[i + j], u, t);
-            C_SUB(buf[i + j + half_len], u, t);
+   {
+      int tab_N;
+# ifdef ENABLE_QEXT
+      const opus_int32 *tab = get_p2_twiddle_table(N, &tab_N);
+# else
+      const opus_int16 *tab = get_p2_twiddle_table(N, &tab_N);
+# endif
+      for (len = 2; len <= N; len <<= 1) {
+         half_len = len >> 1;
+         PFA_DOWNSHIFT(buf, N, downshift_ptr, 1);
+         for (i = 0; i < N; i += len) {
+            for (j = 0; j < half_len; j++) {
+# ifdef ENABLE_QEXT
+               cpx w = lookup_p2_twiddle_fixed32(tab, tab_N, len, j);
+# else
+               cpx w = lookup_p2_twiddle_fixed16(tab, tab_N, len, j);
+# endif
+               cpx u = buf[i + j];
+               cpx t;
+               C_MULC(t, buf[i + j + half_len], w);
+               C_ADD(buf[i + j], u, t);
+               C_SUB(buf[i + j + half_len], u, t);
+            }
          }
       }
    }
@@ -600,8 +628,7 @@ static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, 
       cpx row_temp[64];
       int k;
       for (k = 0; k < M; k++) {
-         int perm = -split_radix_permutation(k, M, 0) & (M - 1);
-         row_temp[k] = tmp[j * M + perm];
+         row_temp[k] = tmp[j * M + sr_perm_map(k, M)];
       }
       celt_tx_fft_sr_c(row_temp, row_temp, M);
       for (k = 0; k < M; k++) {
@@ -694,25 +721,49 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
    const kiss_fft_scalar *in2 = in + ((len2 * 2) - 1) * stride;
 
    /* Pre-rotation */
-   if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
-      for (i = 0; i < len2; i++) {
-         int k = sub_map[i];
-         kiss_twiddle_scalar exp_r = exp[k];
-         kiss_twiddle_scalar exp_i = exp[k + 1];
-         float re_in = in2[-k*stride];
-         float im_in = in1[k*stride];
-         z[i].r = im_in * exp_i - re_in * exp_r;
-         z[i].i = re_in * exp_i + im_in * exp_r;
+   if (stride == 1) {
+      if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
+         for (i = 0; i < len2; i++) {
+            int k = sub_map[i];
+            kiss_twiddle_scalar exp_r = exp[k];
+            kiss_twiddle_scalar exp_i = exp[k + 1];
+            float re_in = in2[-k];
+            float im_in = in1[k];
+            z[i].r = im_in * exp_i - re_in * exp_r;
+            z[i].i = re_in * exp_i + im_in * exp_r;
+         }
+      } else {
+         for (i = 0; i < len2; i++) {
+            int k = sub_map[i];
+            kiss_twiddle_scalar exp_r = exp[k];
+            kiss_twiddle_scalar exp_i = exp[k + 1];
+            float re_in = in2[-k];
+            float im_in = in1[k];
+            z[i].r = re_in * exp_r - im_in * exp_i;
+            z[i].i = re_in * exp_i + im_in * exp_r;
+         }
       }
    } else {
-      for (i = 0; i < len2; i++) {
-         int k = sub_map[i];
-         kiss_twiddle_scalar exp_r = exp[k];
-         kiss_twiddle_scalar exp_i = exp[k + 1];
-         float re_in = in2[-k*stride];
-         float im_in = in1[k*stride];
-         z[i].r = re_in * exp_r - im_in * exp_i;
-         z[i].i = re_in * exp_i + im_in * exp_r;
+      if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
+         for (i = 0; i < len2; i++) {
+            int k = sub_map[i];
+            kiss_twiddle_scalar exp_r = exp[k];
+            kiss_twiddle_scalar exp_i = exp[k + 1];
+            float re_in = in2[-k*stride];
+            float im_in = in1[k*stride];
+            z[i].r = im_in * exp_i - re_in * exp_r;
+            z[i].i = re_in * exp_i + im_in * exp_r;
+         }
+      } else {
+         for (i = 0; i < len2; i++) {
+            int k = sub_map[i];
+            kiss_twiddle_scalar exp_r = exp[k];
+            kiss_twiddle_scalar exp_i = exp[k + 1];
+            float re_in = in2[-k*stride];
+            float im_in = in1[k*stride];
+            z[i].r = re_in * exp_r - im_in * exp_i;
+            z[i].i = re_in * exp_i + im_in * exp_r;
+         }
       }
    }
 
@@ -773,17 +824,32 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
    }
 #else
    const kiss_twiddle_scalar *trig = (const kiss_twiddle_scalar *)s->exp;
-   for (i = 0; i < N4; i++) {
-      int k = s->map[i];
-      int j = k >> 1;
-      kiss_fft_scalar im = in[k * stride];
-      kiss_fft_scalar re = in[(N2 - 1 - k) * stride];
-      kiss_twiddle_scalar trig_r = trig[2 * j];     /* -sin(theta_j) */
-      kiss_twiddle_scalar trig_i = trig[2 * j + 1]; /*  cos(theta_j) */
-      re = SHL32_ovflw(re, pre_shift);
-      im = SHL32_ovflw(im, pre_shift);
-      z[i].r = SUB32_ovflw(S_MUL(im, trig_i), S_MUL(re, trig_r));
-      z[i].i = ADD32_ovflw(S_MUL(re, trig_i), S_MUL(im, trig_r));
+   if (stride == 1) {
+      for (i = 0; i < N4; i++) {
+         int k = s->map[i];
+         int j = k >> 1;
+         kiss_fft_scalar im = in[k];
+         kiss_fft_scalar re = in[N2 - 1 - k];
+         kiss_twiddle_scalar trig_r = trig[2 * j];     /* -sin(theta_j) */
+         kiss_twiddle_scalar trig_i = trig[2 * j + 1]; /*  cos(theta_j) */
+         re = SHL32_ovflw(re, pre_shift);
+         im = SHL32_ovflw(im, pre_shift);
+         z[i].r = SUB32_ovflw(S_MUL(im, trig_i), S_MUL(re, trig_r));
+         z[i].i = ADD32_ovflw(S_MUL(re, trig_i), S_MUL(im, trig_r));
+      }
+   } else {
+      for (i = 0; i < N4; i++) {
+         int k = s->map[i];
+         int j = k >> 1;
+         kiss_fft_scalar im = in[k * stride];
+         kiss_fft_scalar re = in[(N2 - 1 - k) * stride];
+         kiss_twiddle_scalar trig_r = trig[2 * j];     /* -sin(theta_j) */
+         kiss_twiddle_scalar trig_i = trig[2 * j + 1]; /*  cos(theta_j) */
+         re = SHL32_ovflw(re, pre_shift);
+         im = SHL32_ovflw(im, pre_shift);
+         z[i].r = SUB32_ovflw(S_MUL(im, trig_i), S_MUL(re, trig_r));
+         z[i].i = ADD32_ovflw(S_MUL(re, trig_i), S_MUL(im, trig_r));
+      }
    }
 
    if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {

@@ -685,7 +685,6 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
    (void)stride;
 
 #ifndef FIXED_POINT
-   SAVE_STACK;
    VARDECL(cpx, z_temp);
    const kiss_fft_scalar *exp = s->exp;
    const int len2 = N4;
@@ -772,7 +771,6 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
          z[i1].i = src0.r * exp0_r + src0.i * exp0_i;
       }
    }
-   RESTORE_STACK;
 #else
    const kiss_twiddle_scalar *trig = (const kiss_twiddle_scalar *)s->exp;
    for (i = 0; i < N4; i++) {
@@ -827,6 +825,8 @@ void clt_mdct_backward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
    int pre_shift = 0;
    int post_shift = 0;
    int fft_shift = 0;
+   VARDECL(cpx, tmp);
+   SAVE_STACK;
 
    if (tpl == NULL) {
 #if defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API)
@@ -837,13 +837,13 @@ void clt_mdct_backward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
 #endif
    }
 
-   SAVE_STACK;
    trig = l->trig;
    cur_n = l->n;
    for (i = 0; i < shift; i++) {
       cur_n >>= 1;
       trig += cur_n;
    }
+
 #ifdef FIXED_POINT
    {
       opus_val32 sumval = N2;
@@ -864,7 +864,6 @@ void clt_mdct_backward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
 #endif
 
    if (tpl->sub != NULL) {
-      VARDECL(cpx, tmp);
       ALLOC(tmp, N2 / 2, cpx);
       struct OpusTXContext mdct = *tpl;
       struct OpusTXContext pfa = *tpl->sub;
@@ -901,12 +900,13 @@ static void celt_tx_mdct_fwd_c(const struct OpusTXContext *s, kiss_fft_scalar *o
    int i;
    int N2 = s->len;
    int N4 = N2 >> 1;
-   SAVE_STACK;
+   const kiss_twiddle_scalar *trig;
    VARDECL(kiss_fft_scalar, f);
    VARDECL(cpx, z);
+   SAVE_STACK;
    ALLOC(f, N2, kiss_fft_scalar);
    ALLOC(z, N4, cpx);
-   const kiss_twiddle_scalar *trig = (const kiss_twiddle_scalar *)s->exp;
+   trig = (const kiss_twiddle_scalar *)s->exp;
 #ifdef FIXED_POINT
    int headroom = 0;
 #endif
@@ -1046,6 +1046,8 @@ void clt_mdct_forward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
    const kiss_fft_state *st;
    int scale_shift = 0;
    celt_coef scale = 0;
+   VARDECL(cpx, tmp);
+   SAVE_STACK;
    (void)arch;
 
    if (tpl == NULL) {
@@ -1057,7 +1059,6 @@ void clt_mdct_forward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
 #endif
    }
 
-   SAVE_STACK;
    trig = l->trig;
    cur_n = l->n;
    for (i = 0; i < shift; i++) {
@@ -1076,7 +1077,6 @@ void clt_mdct_forward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
 #endif
 
    if (tpl->sub != NULL) {
-      VARDECL(cpx, tmp);
       ALLOC(tmp, N2 / 2, cpx);
       struct OpusTXContext mdct = *tpl;
       struct OpusTXContext pfa = *tpl->sub;
@@ -1118,10 +1118,10 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
 #ifdef FIXED_POINT
    int downshift;
 #endif
-
-   SAVE_STACK;
    VARDECL(cpx, tmp);
    VARDECL(cpx, in_perm);
+   SAVE_STACK;
+
    ALLOC(tmp, nfft, cpx);
    ALLOC(in_perm, nfft, cpx);
 
@@ -1167,10 +1167,10 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
    const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel_c(2 * nfft);
    const struct OpusTXContext *tpl = mdct_tpl ? mdct_tpl->sub : NULL;
    struct OpusTXContext pfa;
-
-   SAVE_STACK;
    VARDECL(cpx, tmp);
    VARDECL(cpx, in_perm);
+   SAVE_STACK;
+
    ALLOC(tmp, nfft, cpx);
    ALLOC(in_perm, nfft, cpx);
 

@@ -185,6 +185,10 @@ void clt_mdct_backward_tx(const mdct_lookup *l, kiss_fft_scalar *in,
    int N = l->n >> shift;
    int N2 = N >> 1;
    const OpusTXContext *tpl = celt_tx_mdct_kernel(N2);
+   const kiss_twiddle_scalar *trig;
+   int cur_n;
+   VARDECL(kiss_fft_scalar, tmp);
+   SAVE_STACK;
 
    if (tpl == NULL)
    {
@@ -194,8 +198,8 @@ void clt_mdct_backward_tx(const mdct_lookup *l, kiss_fft_scalar *in,
    }
    (void)arch;
 
-   const kiss_twiddle_scalar *trig = l->trig;
-   int cur_n = l->n;
+   trig = l->trig;
+   cur_n = l->n;
    for (i = 0; i < shift; i++) {
       cur_n >>= 1;
       trig += cur_n;
@@ -210,8 +214,6 @@ void clt_mdct_backward_tx(const mdct_lookup *l, kiss_fft_scalar *in,
    if (tpl->fn == celt_tx_fft_pfa_15xM_ns_float_neon)
    {
       OpusTXContext mdct, pfa;
-      VARDECL(kiss_fft_scalar, tmp);
-      SAVE_STACK;
       ALLOC(tmp, N2, kiss_fft_scalar);   /* N/4 complex values */
 
       mdct = *tpl;
@@ -221,7 +223,6 @@ void clt_mdct_backward_tx(const mdct_lookup *l, kiss_fft_scalar *in,
       mdct.sub = &pfa;
       celt_tx_mdct_inv_float_neon(&mdct, out+(overlap>>1), in,
                                   (ptrdiff_t)stride*sizeof(kiss_fft_scalar));
-      RESTORE_STACK;
    } else {
       OpusTXContext mdct = *tpl;
       mdct.exp = trig;
@@ -247,6 +248,7 @@ void clt_mdct_backward_tx(const mdct_lookup *l, kiss_fft_scalar *in,
          wp2--;
       }
    }
+   RESTORE_STACK;
 }
 
 #endif /* OPUS_ARM_TX_MDCT */

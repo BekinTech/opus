@@ -139,20 +139,20 @@ static const OpusTXContext celt_tx_sr_512 = { 512, 1, NULL, NULL, NULL, NULL, NU
 
 /* Inverse MDCT roots; for the 15*M sizes .sub is relinked per call to the
    stack copy of the PFA context, the power-of-two ones run fully const. */
-static const OpusTXContext celt_tx_mdct_120  = {  120, 1, celt_tx_mdct_map_120,  (const void *)celt_tx_mdct_exp_120,  NULL, &celt_tx_pfa_60,  celt_tx_fft_pfa_15xM_ns_float_neon };
-static const OpusTXContext celt_tx_mdct_240  = {  240, 1, celt_tx_mdct_map_240,  (const void *)celt_tx_mdct_exp_240,  NULL, &celt_tx_pfa_120, celt_tx_fft_pfa_15xM_ns_float_neon };
-static const OpusTXContext celt_tx_mdct_480  = {  480, 1, celt_tx_mdct_map_480,  (const void *)celt_tx_mdct_exp_480,  NULL, &celt_tx_pfa_240, celt_tx_fft_pfa_15xM_ns_float_neon };
-static const OpusTXContext celt_tx_mdct_960  = {  960, 1, celt_tx_mdct_map_960,  (const void *)celt_tx_mdct_exp_960,  NULL, &celt_tx_pfa_480, celt_tx_fft_pfa_15xM_ns_float_neon };
+static const OpusTXContext celt_tx_mdct_120  = {  120, 1, celt_tx_mdct_map_120,  NULL,  NULL, &celt_tx_pfa_60,  celt_tx_fft_pfa_15xM_ns_float_neon };
+static const OpusTXContext celt_tx_mdct_240  = {  240, 1, celt_tx_mdct_map_240,  NULL,  NULL, &celt_tx_pfa_120, celt_tx_fft_pfa_15xM_ns_float_neon };
+static const OpusTXContext celt_tx_mdct_480  = {  480, 1, celt_tx_mdct_map_480,  NULL,  NULL, &celt_tx_pfa_240, celt_tx_fft_pfa_15xM_ns_float_neon };
+static const OpusTXContext celt_tx_mdct_960  = {  960, 1, celt_tx_mdct_map_960,  NULL,  NULL, &celt_tx_pfa_480, celt_tx_fft_pfa_15xM_ns_float_neon };
 #if defined(ENABLE_QEXT)
-static const OpusTXContext celt_tx_mdct_1920 = { 1920, 1, celt_tx_mdct_map_1920, (const void *)celt_tx_mdct_exp_1920, NULL, &celt_tx_pfa_960, celt_tx_fft_pfa_15xM_ns_float_neon };
+static const OpusTXContext celt_tx_mdct_1920 = { 1920, 1, celt_tx_mdct_map_1920, NULL, NULL, &celt_tx_pfa_960, celt_tx_fft_pfa_15xM_ns_float_neon };
 #endif
 
 #if defined(CUSTOM_MODES)
-static const OpusTXContext celt_tx_mdct_64   = {   64, 1, celt_tx_mdct_map_64,   (const void *)celt_tx_mdct_exp_64,   NULL, &celt_tx_sr_32,  celt_tx_fft32_ns_float_neon };
-static const OpusTXContext celt_tx_mdct_128  = {  128, 1, celt_tx_mdct_map_128,  (const void *)celt_tx_mdct_exp_128,  NULL, &celt_tx_sr_64,  celt_tx_fft_sr_ns_float_neon };
-static const OpusTXContext celt_tx_mdct_256  = {  256, 1, celt_tx_mdct_map_256,  (const void *)celt_tx_mdct_exp_256,  NULL, &celt_tx_sr_128, celt_tx_fft_sr_ns_float_neon };
-static const OpusTXContext celt_tx_mdct_512  = {  512, 1, celt_tx_mdct_map_512,  (const void *)celt_tx_mdct_exp_512,  NULL, &celt_tx_sr_256, celt_tx_fft_sr_ns_float_neon };
-static const OpusTXContext celt_tx_mdct_1024 = { 1024, 1, celt_tx_mdct_map_1024, (const void *)celt_tx_mdct_exp_1024, NULL, &celt_tx_sr_512, celt_tx_fft_sr_ns_float_neon };
+static const OpusTXContext celt_tx_mdct_64   = {   64, 1, celt_tx_mdct_map_64,   NULL,   NULL, &celt_tx_sr_32,  celt_tx_fft32_ns_float_neon };
+static const OpusTXContext celt_tx_mdct_128  = {  128, 1, celt_tx_mdct_map_128,  NULL,  NULL, &celt_tx_sr_64,  celt_tx_fft_sr_ns_float_neon };
+static const OpusTXContext celt_tx_mdct_256  = {  256, 1, celt_tx_mdct_map_256,  NULL,  NULL, &celt_tx_sr_128, celt_tx_fft_sr_ns_float_neon };
+static const OpusTXContext celt_tx_mdct_512  = {  512, 1, celt_tx_mdct_map_512,  NULL,  NULL, &celt_tx_sr_256, celt_tx_fft_sr_ns_float_neon };
+static const OpusTXContext celt_tx_mdct_1024 = { 1024, 1, celt_tx_mdct_map_1024, NULL, NULL, &celt_tx_sr_512, celt_tx_fft_sr_ns_float_neon };
 #endif
 
 static const OpusTXContext *celt_tx_mdct_kernel(int len)
@@ -194,6 +194,13 @@ void clt_mdct_backward_tx(const mdct_lookup *l, kiss_fft_scalar *in,
    }
    (void)arch;
 
+   const kiss_twiddle_scalar *trig = l->trig;
+   int cur_n = l->n;
+   for (i = 0; i < shift; i++) {
+      cur_n >>= 1;
+      trig += cur_n;
+   }
+
    /* Pre-rotate, N/4 complex FFT and post-rotate, writing the raw N/2
       samples to out[overlap/2 ..] like the C code does. For the 15*M sizes,
       only the PFA scratch buffer is written through the context tree, so
@@ -208,6 +215,7 @@ void clt_mdct_backward_tx(const mdct_lookup *l, kiss_fft_scalar *in,
       ALLOC(tmp, N2, kiss_fft_scalar);   /* N/4 complex values */
 
       mdct = *tpl;
+      mdct.exp = trig;
       pfa = *tpl->sub;
       pfa.tmp = tmp;
       mdct.sub = &pfa;
@@ -215,7 +223,9 @@ void clt_mdct_backward_tx(const mdct_lookup *l, kiss_fft_scalar *in,
                                   (ptrdiff_t)stride*sizeof(kiss_fft_scalar));
       RESTORE_STACK;
    } else {
-      celt_tx_mdct_inv_float_neon(tpl, out+(overlap>>1), in,
+      OpusTXContext mdct = *tpl;
+      mdct.exp = trig;
+      celt_tx_mdct_inv_float_neon(&mdct, out+(overlap>>1), in,
                                   (ptrdiff_t)stride*sizeof(kiss_fft_scalar));
    }
 

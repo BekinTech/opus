@@ -86,36 +86,25 @@
 #include "kiss_fft.h"
 
 extern const opus_int16 celt_tx_mdct_map_120[120];
-extern const float celt_tx_mdct_exp_120[120];
 extern const opus_int16 celt_tx_pfa_map_60[60];
 extern const opus_int16 celt_tx_p2_map_4[4];
 extern const opus_int16 celt_tx_mdct_map_240[240];
-extern const float celt_tx_mdct_exp_240[240];
 extern const opus_int16 celt_tx_pfa_map_120[120];
 extern const opus_int16 celt_tx_p2_map_8[8];
 extern const opus_int16 celt_tx_mdct_map_480[480];
-extern const float celt_tx_mdct_exp_480[480];
 extern const opus_int16 celt_tx_pfa_map_240[240];
 extern const opus_int16 celt_tx_p2_map_16[16];
 extern const opus_int16 celt_tx_mdct_map_960[960];
-extern const float celt_tx_mdct_exp_960[960];
 extern const opus_int16 celt_tx_pfa_map_480[480];
 extern const opus_int16 celt_tx_p2_map_32[32];
 extern const opus_int16 celt_tx_mdct_map_1920[1920];
-extern const float celt_tx_mdct_exp_1920[1920];
 extern const opus_int16 celt_tx_pfa_map_960[960];
 extern const opus_int16 celt_tx_p2_map_64[64];
 extern const opus_int16 celt_tx_mdct_map_64[64];
-extern const float celt_tx_mdct_exp_64[64];
 extern const opus_int16 celt_tx_mdct_map_128[128];
-extern const float celt_tx_mdct_exp_128[128];
 extern const opus_int16 celt_tx_mdct_map_256[256];
-extern const float celt_tx_mdct_exp_256[256];
 extern const opus_int16 celt_tx_mdct_map_512[512];
-extern const float celt_tx_mdct_exp_512[512];
 extern const opus_int16 celt_tx_mdct_map_1024[1024];
-extern const float celt_tx_mdct_exp_1024[1024];
-
 extern const opus_int16 celt_tx_bridge_map_16[16];
 extern const opus_int16 celt_tx_bridge_map_32[32];
 extern const opus_int16 celt_tx_bridge_map_64[64];
@@ -123,15 +112,30 @@ extern const opus_int16 celt_tx_bridge_map_128[128];
 extern const opus_int16 celt_tx_bridge_map_256[256];
 extern const opus_int16 celt_tx_bridge_map_512[512];
 
-/* FFT Twiddle Tables from assembly */
-
+#ifndef FIXED_POINT
 extern const float celt_tx_tab_53_float[12];
 extern const float celt_tx_tab_32_float[9];
 extern const float celt_tx_tab_64_float[17];
 extern const float celt_tx_tab_128_float[33];
 extern const float celt_tx_tab_256_float[65];
 extern const float celt_tx_tab_512_float[129];
-
+#else /* FIXED_POINT */
+# ifdef ENABLE_QEXT
+extern const opus_int32 celt_tx_tab_53_fixed32[12];
+extern const opus_int32 celt_tx_tab_32_fixed32[9];
+extern const opus_int32 celt_tx_tab_64_fixed32[17];
+extern const opus_int32 celt_tx_tab_128_fixed32[33];
+extern const opus_int32 celt_tx_tab_256_fixed32[65];
+extern const opus_int32 celt_tx_tab_512_fixed32[129];
+# else /* !ENABLE_QEXT */
+extern const opus_int16 celt_tx_tab_53_fixed16[12];
+extern const opus_int16 celt_tx_tab_32_fixed16[9];
+extern const opus_int16 celt_tx_tab_64_fixed16[17];
+extern const opus_int16 celt_tx_tab_128_fixed16[33];
+extern const opus_int16 celt_tx_tab_256_fixed16[65];
+extern const opus_int16 celt_tx_tab_512_fixed16[129];
+# endif /* ENABLE_QEXT */
+#endif /* FIXED_POINT */
 #endif /* NEED_CELT_TX_TABLES */
 
 #endif /* CELT_TX_TABLES_H */

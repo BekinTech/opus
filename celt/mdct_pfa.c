@@ -124,11 +124,12 @@ static void get_pfa_crt_params(int M, int *K3, int *K4);
 
 static OPUS_INLINE cpx get_p2_twiddle(int N, int j) {
    cpx w;
-   const float *tab;
    int tab_N;
    int idx;
    int quarter;
    int half;
+#ifndef FIXED_POINT
+   const float *tab;
    float r, i;
 
    if (N <= 32) {
@@ -157,18 +158,75 @@ static OPUS_INLINE cpx get_p2_twiddle(int N, int j) {
       i = 1.0f;
    }
 
-#ifndef FIXED_POINT
    w.r = r;
    w.i = i;
-#else
-#ifdef ENABLE_QEXT
-   w.r = (kiss_fft_scalar)lrint(r * 2147483647.0);
-   w.i = (kiss_fft_scalar)lrint(i * 2147483647.0);
-#else
-   w.r = (kiss_fft_scalar)lrintf(r * 32767.0f);
-   w.i = (kiss_fft_scalar)lrintf(i * 32767.0f);
-#endif
-#endif
+#else /* FIXED_POINT */
+# ifdef ENABLE_QEXT
+   const opus_int32 *tab;
+   opus_int32 r, i;
+
+   if (N <= 32) {
+      tab = celt_tx_tab_32_fixed32;
+      tab_N = 32;
+   } else {
+      tab_N = N;
+      if (N == 64) tab = celt_tx_tab_64_fixed32;
+      else if (N == 128) tab = celt_tx_tab_128_fixed32;
+      else if (N == 256) tab = celt_tx_tab_256_fixed32;
+      else tab = celt_tx_tab_512_fixed32;
+   }
+
+   idx = j * (tab_N / N);
+   quarter = tab_N >> 2;
+   half = tab_N >> 1;
+
+   if (idx < quarter) {
+      r = tab[idx];
+      i = tab[quarter - idx];
+   } else if (idx > quarter) {
+      r = -tab[half - idx];
+      i = tab[idx - quarter];
+   } else {
+      r = 0;
+      i = Q31ONE;
+   }
+
+   w.r = r;
+   w.i = i;
+# else /* !ENABLE_QEXT */
+   const opus_int16 *tab;
+   opus_int16 r, i;
+
+   if (N <= 32) {
+      tab = celt_tx_tab_32_fixed16;
+      tab_N = 32;
+   } else {
+      tab_N = N;
+      if (N == 64) tab = celt_tx_tab_64_fixed16;
+      else if (N == 128) tab = celt_tx_tab_128_fixed16;
+      else if (N == 256) tab = celt_tx_tab_256_fixed16;
+      else tab = celt_tx_tab_512_fixed16;
+   }
+
+   idx = j * (tab_N / N);
+   quarter = tab_N >> 2;
+   half = tab_N >> 1;
+
+   if (idx < quarter) {
+      r = tab[idx];
+      i = tab[quarter - idx];
+   } else if (idx > quarter) {
+      r = -tab[half - idx];
+      i = tab[idx - quarter];
+   } else {
+      r = 0;
+      i = Q15ONE;
+   }
+
+   w.r = r;
+   w.i = i;
+# endif /* ENABLE_QEXT */
+#endif /* FIXED_POINT */
    return w;
 }
 
@@ -569,12 +627,12 @@ static const struct OpusTXContext celt_tx_pfa_480_c = { 480, 1, celt_tx_pfa_map_
 static const struct OpusTXContext celt_tx_pfa_960_c = { 960, 1, celt_tx_pfa_map_960, NULL, NULL, &celt_tx_p2_64_c, NULL, NULL };
 #endif
 
-static const struct OpusTXContext celt_tx_mdct_120_c  = {  120, 1, celt_tx_mdct_map_120,  (const void *)celt_tx_mdct_exp_120,  NULL, &celt_tx_pfa_60_c,  (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
-static const struct OpusTXContext celt_tx_mdct_240_c  = {  240, 1, celt_tx_mdct_map_240,  (const void *)celt_tx_mdct_exp_240,  NULL, &celt_tx_pfa_120_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
-static const struct OpusTXContext celt_tx_mdct_480_c  = {  480, 1, celt_tx_mdct_map_480,  (const void *)celt_tx_mdct_exp_480,  NULL, &celt_tx_pfa_240_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
-static const struct OpusTXContext celt_tx_mdct_960_c  = {  960, 1, celt_tx_mdct_map_960,  (const void *)celt_tx_mdct_exp_960,  NULL, &celt_tx_pfa_480_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_120_c  = {  120, 1, celt_tx_mdct_map_120,  NULL,  NULL, &celt_tx_pfa_60_c,  (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_240_c  = {  240, 1, celt_tx_mdct_map_240,  NULL,  NULL, &celt_tx_pfa_120_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_480_c  = {  480, 1, celt_tx_mdct_map_480,  NULL,  NULL, &celt_tx_pfa_240_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_960_c  = {  960, 1, celt_tx_mdct_map_960,  NULL,  NULL, &celt_tx_pfa_480_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
 #if defined(ENABLE_QEXT)
-static const struct OpusTXContext celt_tx_mdct_1920_c = { 1920, 1, celt_tx_mdct_map_1920, (const void *)celt_tx_mdct_exp_1920, NULL, &celt_tx_pfa_960_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_1920_c = { 1920, 1, celt_tx_mdct_map_1920, NULL, NULL, &celt_tx_pfa_960_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
 #endif
 
 #if defined(CUSTOM_MODES) && !defined(FIXED_POINT)
@@ -586,11 +644,11 @@ static const struct OpusTXContext celt_tx_sr_256_c = { 256, 1, NULL, NULL, NULL,
 static const struct OpusTXContext celt_tx_sr_512_c = { 512, 1, NULL, NULL, NULL, NULL, NULL, NULL };
 
 /* Power-of-two MDCT contexts */
-static const struct OpusTXContext celt_tx_mdct_64_c   = {   64, 1, celt_tx_mdct_map_64,   (const void *)celt_tx_mdct_exp_64,   NULL, &celt_tx_sr_32_c,  NULL, celt_tx_bridge_map_32 };
-static const struct OpusTXContext celt_tx_mdct_128_c  = {  128, 1, celt_tx_mdct_map_128,  (const void *)celt_tx_mdct_exp_128,  NULL, &celt_tx_sr_64_c,  NULL, celt_tx_bridge_map_64 };
-static const struct OpusTXContext celt_tx_mdct_256_c  = {  256, 1, celt_tx_mdct_map_256,  (const void *)celt_tx_mdct_exp_256,  NULL, &celt_tx_sr_128_c, NULL, celt_tx_bridge_map_128 };
-static const struct OpusTXContext celt_tx_mdct_512_c  = {  512, 1, celt_tx_mdct_map_512,  (const void *)celt_tx_mdct_exp_512,  NULL, &celt_tx_sr_256_c, NULL, celt_tx_bridge_map_256 };
-static const struct OpusTXContext celt_tx_mdct_1024_c = { 1024, 1, celt_tx_mdct_map_1024, (const void *)celt_tx_mdct_exp_1024, NULL, &celt_tx_sr_512_c, NULL, celt_tx_bridge_map_512 };
+static const struct OpusTXContext celt_tx_mdct_64_c   = {   64, 1, celt_tx_mdct_map_64,   NULL,   NULL, &celt_tx_sr_32_c,  NULL, celt_tx_bridge_map_32 };
+static const struct OpusTXContext celt_tx_mdct_128_c  = {  128, 1, celt_tx_mdct_map_128,  NULL,  NULL, &celt_tx_sr_64_c,  NULL, celt_tx_bridge_map_64 };
+static const struct OpusTXContext celt_tx_mdct_256_c  = {  256, 1, celt_tx_mdct_map_256,  NULL,  NULL, &celt_tx_sr_128_c, NULL, celt_tx_bridge_map_128 };
+static const struct OpusTXContext celt_tx_mdct_512_c  = {  512, 1, celt_tx_mdct_map_512,  NULL,  NULL, &celt_tx_sr_256_c, NULL, celt_tx_bridge_map_256 };
+static const struct OpusTXContext celt_tx_mdct_1024_c = { 1024, 1, celt_tx_mdct_map_1024, NULL, NULL, &celt_tx_sr_512_c, NULL, celt_tx_bridge_map_512 };
 #endif
 
 static const struct OpusTXContext *celt_tx_mdct_kernel_c(int len)
@@ -807,18 +865,12 @@ void clt_mdct_backward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
       struct OpusTXContext pfa = *tpl->sub;
       pfa.tmp = tmp;
       mdct.sub = &pfa;
-#ifdef FIXED_POINT
       mdct.exp = trig;
-#endif
       celt_tx_mdct_inv_c(&mdct, out + (overlap >> 1), in, stride ARG_FIXED(pre_shift) ARG_FIXED(fft_shift) ARG_FIXED(post_shift));
    } else {
-#ifdef FIXED_POINT
       struct OpusTXContext mdct = *tpl;
       mdct.exp = trig;
       celt_tx_mdct_inv_c(&mdct, out + (overlap >> 1), in, stride ARG_FIXED(pre_shift) ARG_FIXED(fft_shift) ARG_FIXED(post_shift));
-#else
-      celt_tx_mdct_inv_c(tpl, out + (overlap >> 1), in, stride ARG_FIXED(pre_shift) ARG_FIXED(fft_shift) ARG_FIXED(post_shift));
-#endif
    }
 
    {

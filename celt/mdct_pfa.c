@@ -92,6 +92,9 @@ static OPUS_INLINE cpx crot(cpx a) {
    return (cpx){-a.i, a.r};
 }
 
+typedef struct OpusTXContext OpusTXContext;
+typedef void (*opus_tx_fn)(const OpusTXContext *s, void *out, void *in, ptrdiff_t stride ARG_FIXED(int downshift));
+
 struct OpusTXContext {
    opus_int32 len;
    opus_int32 inv;
@@ -99,7 +102,7 @@ struct OpusTXContext {
    const void *exp;
    void *tmp;
    const struct OpusTXContext *sub;
-   void *fn;
+   opus_tx_fn fn;
    const opus_int16 *bridge_map;
 };
 
@@ -628,12 +631,12 @@ static const struct OpusTXContext celt_tx_pfa_480_c = { 480, 1, celt_tx_pfa_map_
 static const struct OpusTXContext celt_tx_pfa_960_c = { 960, 1, celt_tx_pfa_map_960, NULL, NULL, &celt_tx_p2_64_c, NULL, NULL };
 #endif
 
-static const struct OpusTXContext celt_tx_mdct_120_c  = {  120, 1, celt_tx_mdct_map_120,  NULL,  NULL, &celt_tx_pfa_60_c,  (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
-static const struct OpusTXContext celt_tx_mdct_240_c  = {  240, 1, celt_tx_mdct_map_240,  NULL,  NULL, &celt_tx_pfa_120_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
-static const struct OpusTXContext celt_tx_mdct_480_c  = {  480, 1, celt_tx_mdct_map_480,  NULL,  NULL, &celt_tx_pfa_240_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
-static const struct OpusTXContext celt_tx_mdct_960_c  = {  960, 1, celt_tx_mdct_map_960,  NULL,  NULL, &celt_tx_pfa_480_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_120_c  = {  120, 1, celt_tx_mdct_map_120,  NULL,  NULL, &celt_tx_pfa_60_c,  celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_240_c  = {  240, 1, celt_tx_mdct_map_240,  NULL,  NULL, &celt_tx_pfa_120_c, celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_480_c  = {  480, 1, celt_tx_mdct_map_480,  NULL,  NULL, &celt_tx_pfa_240_c, celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_960_c  = {  960, 1, celt_tx_mdct_map_960,  NULL,  NULL, &celt_tx_pfa_480_c, celt_tx_fft_pfa_15xM_ns_c, NULL };
 #if defined(ENABLE_QEXT)
-static const struct OpusTXContext celt_tx_mdct_1920_c = { 1920, 1, celt_tx_mdct_map_1920, NULL, NULL, &celt_tx_pfa_960_c, (void *)celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_1920_c = { 1920, 1, celt_tx_mdct_map_1920, NULL, NULL, &celt_tx_pfa_960_c, celt_tx_fft_pfa_15xM_ns_c, NULL };
 #endif
 
 #if defined(CUSTOM_MODES) && !defined(FIXED_POINT)
@@ -692,7 +695,7 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
    const kiss_fft_scalar *in2 = in + ((len2 * 2) - 1) * stride;
 
    /* Pre-rotation */
-   if (s->fn == (void *)celt_tx_fft_pfa_15xM_ns_c) {
+   if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
       for (i = 0; i < len2; i++) {
          int k = sub_map[i];
          kiss_twiddle_scalar exp_r = exp[k];
@@ -725,14 +728,14 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
    }
 
    /* FFT */
-   if (s->fn == (void *)celt_tx_fft_pfa_15xM_ns_c) {
+   if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
       celt_tx_fft_pfa_15xM_ns_c(s->sub, z, z, 1);
    } else {
       celt_tx_fft_sr_c(z, z, len2);
    }
 
    /* Post-rotation (reuse pre-rotation table for CELT) */
-   if (s->fn == (void *)celt_tx_fft_pfa_15xM_ns_c) {
+   if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
       /* PFA Post-rotation (standard) */
       for (i = 0; i < len4; i++) {
          int i0 = i;
@@ -785,7 +788,7 @@ static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *o
       z[i].i = ADD32_ovflw(S_MUL(re, trig_i), S_MUL(im, trig_r));
    }
 
-   if (s->fn == (void *)celt_tx_fft_pfa_15xM_ns_c) {
+   if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
       celt_tx_fft_pfa_15xM_ns_c(s->sub, z, z, 1 ARG_FIXED(fft_shift));
       /* PFA Post-rotation (standard) */
       for (i = 0; i < N4 / 2; i++) {
@@ -973,7 +976,7 @@ static void celt_tx_mdct_fwd_c(const struct OpusTXContext *s, kiss_fft_scalar *o
 #ifdef FIXED_POINT
    int fft_shift = scale_shift - headroom;
 #endif
-   if (s->fn == (void *)celt_tx_fft_pfa_15xM_ns_c) {
+   if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
       celt_tx_fft_pfa_15xM_ns_c(s->sub, z, z, 1 ARG_FIXED(fft_shift));
       /* PFA Post-rotation */
       for (i = 0; i < N4; i++) {

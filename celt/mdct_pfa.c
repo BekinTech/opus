@@ -549,11 +549,12 @@ static void decl_fft5(const cpx *in, int r3, cpx *out, int stride) {
 
 static void celt_tx_fft15_c(const cpx *in, cpx *out, int stride) {
    cpx tmp[15];
+   int c5, r3;
 
-   for (int c5 = 0; c5 < 5; c5++) {
+   for (c5 = 0; c5 < 5; c5++) {
       cpx in_col[3];
       cpx out_col[3];
-      for (int r3 = 0; r3 < 3; r3++) {
+      for (r3 = 0; r3 < 3; r3++) {
          int r_pfa = celt_tx_pfa_P[(10 * r3 + 6 * c5) % 15];
          in_col[r3] = in[r_pfa];
       }
@@ -818,6 +819,11 @@ void clt_mdct_backward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
    int N = l->n >> shift;
    int N2 = N >> 1;
    const struct OpusTXContext *tpl = celt_tx_mdct_kernel_c(N2);
+   const kiss_twiddle_scalar *trig;
+   int cur_n;
+   int pre_shift = 0;
+   int post_shift = 0;
+   int fft_shift = 0;
 
    if (tpl == NULL) {
 #if defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API)
@@ -829,16 +835,12 @@ void clt_mdct_backward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
    }
 
    SAVE_STACK;
-   const kiss_twiddle_scalar *trig = l->trig;
-   int cur_n = l->n;
+   trig = l->trig;
+   cur_n = l->n;
    for (i = 0; i < shift; i++) {
       cur_n >>= 1;
       trig += cur_n;
    }
-
-   int pre_shift = 0;
-   int post_shift = 0;
-   int fft_shift = 0;
 #ifdef FIXED_POINT
    {
       opus_val32 sumval = N2;
@@ -1036,6 +1038,11 @@ void clt_mdct_forward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
    int N = l->n >> shift;
    int N2 = N >> 1;
    const struct OpusTXContext *tpl = celt_tx_mdct_kernel_c(N2);
+   const kiss_twiddle_scalar *trig;
+   int cur_n;
+   const kiss_fft_state *st;
+   int scale_shift = 0;
+   celt_coef scale = 0;
    (void)arch;
 
    if (tpl == NULL) {
@@ -1048,16 +1055,14 @@ void clt_mdct_forward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
    }
 
    SAVE_STACK;
-   const kiss_twiddle_scalar *trig = l->trig;
-   int cur_n = l->n;
+   trig = l->trig;
+   cur_n = l->n;
    for (i = 0; i < shift; i++) {
       cur_n >>= 1;
       trig += cur_n;
    }
 
-   const kiss_fft_state *st = l->kfft[shift];
-   int scale_shift = 0;
-   celt_coef scale = 0;
+   st = l->kfft[shift];
 #ifdef FIXED_POINT
    scale_shift = st->scale_shift - 1;
    scale = st->scale;
@@ -1105,6 +1110,11 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
    int K3, K4;
    const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel_c(2 * nfft);
    const struct OpusTXContext *tpl = mdct_tpl ? mdct_tpl->sub : NULL;
+   celt_coef scale;
+   struct OpusTXContext pfa;
+#ifdef FIXED_POINT
+   int downshift;
+#endif
 
    SAVE_STACK;
    VARDECL(cpx, tmp);
@@ -1115,7 +1125,7 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
    get_pfa_crt_params(M, &K3, &K4);
 
    /* 1. Scale and permute input to grid order: dest = c + r * M */
-   celt_coef scale = st->scale;
+   scale = st->scale;
    for (i = 0; i < nfft; i++) {
       int r = celt_tx_pfa_P[(i * K4) % 15];
       int c = (i * K3) % M;
@@ -1130,7 +1140,6 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
    }
 
    /* 2. Run the PFA core forward FFT */
-   struct OpusTXContext pfa;
    if (tpl == NULL) {
       RESTORE_STACK;
       return;
@@ -1139,7 +1148,7 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
    pfa.tmp = tmp;
 
 #ifdef FIXED_POINT
-   int downshift = st->scale_shift - 1;
+   downshift = st->scale_shift - 1;
 #endif
    celt_tx_fft_pfa_15xM_ns_c(&pfa, fout, in_perm, 1 ARG_FIXED(downshift));
 
@@ -1154,6 +1163,7 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
    int K3, K4;
    const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel_c(2 * nfft);
    const struct OpusTXContext *tpl = mdct_tpl ? mdct_tpl->sub : NULL;
+   struct OpusTXContext pfa;
 
    SAVE_STACK;
    VARDECL(cpx, tmp);
@@ -1172,7 +1182,6 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
    }
 
    /* 2. Run the PFA core forward FFT (downshift = 0) */
-   struct OpusTXContext pfa;
    if (tpl == NULL) {
       RESTORE_STACK;
       return;

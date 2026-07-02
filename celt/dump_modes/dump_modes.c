@@ -205,6 +205,7 @@ void dump_modes(FILE *file, CELTMode **modes, int nb_modes)
       dump_mode_arch(mode);
 #endif
       /* FFT Bitrev tables */
+      fprintf(file, "#if !defined(OPUS_USE_PFA_MDCT)\n");
       for (k=0;k<=mode->mdct.maxshift;k++)
       {
          fprintf(file, "#ifndef FFT_BITREV%d\n", mode->mdct.kfft[k]->nfft);
@@ -218,6 +219,7 @@ void dump_modes(FILE *file, CELTMode **modes, int nb_modes)
          fprintf(file, "#endif\n");
          fprintf(file, "\n");
       }
+      fprintf(file, "#endif /* !OPUS_USE_PFA_MDCT */\n\n");
 
       /* FFT States */
       for (k=0;k<=mode->mdct.maxshift;k++)
@@ -245,7 +247,11 @@ void dump_modes(FILE *file, CELTMode **modes, int nb_modes)
          for (j=0;j<2*MAXFACTORS;j++)
             fprintf (file, "%d, ", mode->mdct.kfft[k]->factors[j]);
          fprintf (file, "},    /* factors */\n");
+         fprintf (file, "#if defined(OPUS_USE_PFA_MDCT)\n");
+         fprintf (file, "NULL,    /* bitrev */\n");
+         fprintf (file, "#else\n");
          fprintf (file, "fft_bitrev%d,    /* bitrev */\n", mode->mdct.kfft[k]->nfft);
+         fprintf (file, "#endif\n");
          fprintf (file, "#if defined(OPUS_USE_PFA_MDCT)\n");
          fprintf (file, "NULL,    /* twiddles */\n");
          fprintf (file, "#else\n");

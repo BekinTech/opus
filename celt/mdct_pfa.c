@@ -121,17 +121,23 @@ static inline int split_radix_permutation(int i, int len, int inv)
     return split_radix_permutation(i, len, inv) * 4 + 1 - 2*(!(i & len) ^ inv);
 }
 
-static OPUS_INLINE int sr_perm_map(int k, int M) {
+static OPUS_INLINE const opus_int16 *get_sr_perm_table(int M) {
    static const opus_int16 p4[4]   = { 0, 2, 1, 3 };
    static const opus_int16 p8[8]   = { 0, 4, 2, 6, 1, 5, 7, 3 };
    static const opus_int16 p16[16] = { 0, 8, 4, 12, 2, 10, 14, 6, 1, 9, 5, 13, 15, 7, 3, 11 };
    static const opus_int16 p32[32] = { 0, 16, 8, 24, 4, 20, 28, 12, 2, 18, 10, 26, 30, 14, 6, 22, 1, 17, 9, 25, 5, 21, 29, 13, 31, 15, 7, 23, 3, 19, 27, 11 };
    static const opus_int16 p64[64] = { 0, 32, 16, 48, 8, 40, 56, 24, 4, 36, 20, 52, 60, 28, 12, 44, 2, 34, 18, 50, 10, 42, 58, 26, 62, 30, 14, 46, 6, 38, 54, 22, 1, 33, 17, 49, 9, 41, 57, 25, 5, 37, 21, 53, 61, 29, 13, 45, 63, 31, 15, 47, 7, 39, 55, 23, 3, 35, 19, 51, 59, 27, 11, 43 };
-   if (M == 4) return p4[k];
-   if (M == 8) return p8[k];
-   if (M == 16) return p16[k];
-   if (M == 32) return p32[k];
-   if (M == 64) return p64[k];
+   if (M == 4) return p4;
+   if (M == 8) return p8;
+   if (M == 16) return p16;
+   if (M == 32) return p32;
+   if (M == 64) return p64;
+   return NULL;
+}
+
+static OPUS_INLINE int sr_perm_map(int k, int M) {
+   const opus_int16 *perm = get_sr_perm_table(M);
+   if (perm != NULL) return perm[k];
    return -split_radix_permutation(k, M, 0) & (M - 1);
 }
 
@@ -632,15 +638,30 @@ static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, 
       celt_tx_fft_p2_c(tmp + j * M, tmp + j * M, M ARG_FIXED(&sub_shift));
       if (j == 14) downshift = sub_shift;
 #else
+   {
+      const opus_int16 *perm;
       cpx row_temp[64];
+      const cpx *row;
       int k;
-      for (k = 0; k < M; k++) {
-         row_temp[k] = tmp[j * M + sr_perm_map(k, M)];
+
+      perm = get_sr_perm_table(M);
+      for (j = 0; j < 15; j++) {
+         row = tmp + j * M;
+         if (perm != NULL) {
+            for (k = 0; k < M; k++) {
+               row_temp[k] = row[perm[k]];
+            }
+         } else {
+            for (k = 0; k < M; k++) {
+               row_temp[k] = row[-split_radix_permutation(k, M, 0) & (M - 1)];
+            }
+         }
+         celt_tx_fft_sr_c(row_temp, row_temp, M);
+         for (k = 0; k < M; k++) {
+            tmp[j * M + k] = row_temp[k];
+         }
       }
-      celt_tx_fft_sr_c(row_temp, row_temp, M);
-      for (k = 0; k < M; k++) {
-         tmp[j * M + k] = row_temp[k];
-      }
+   }
 #endif
    }
 

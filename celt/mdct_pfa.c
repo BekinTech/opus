@@ -153,9 +153,13 @@ static OPUS_INLINE const float *get_p2_twiddle_table(int N, int *tab_N_out) {
    }
    *tab_N_out = N;
    if (N == 64) return celt_tx_tab_64_float;
+#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
    if (N == 128) return celt_tx_tab_128_float;
    if (N == 256) return celt_tx_tab_256_float;
    return celt_tx_tab_512_float;
+#else
+   return NULL;
+#endif
 }
 
 static OPUS_INLINE cpx lookup_p2_twiddle_float(const float *tab, int tab_N, int N, int j) {
@@ -184,9 +188,13 @@ static OPUS_INLINE const opus_int32 *get_p2_twiddle_table(int N, int *tab_N_out)
    }
    *tab_N_out = N;
    if (N == 64) return celt_tx_tab_64_fixed32;
+#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
    if (N == 128) return celt_tx_tab_128_fixed32;
    if (N == 256) return celt_tx_tab_256_fixed32;
    return celt_tx_tab_512_fixed32;
+#else
+   return NULL;
+#endif
 }
 
 static OPUS_INLINE cpx lookup_p2_twiddle_fixed32(const opus_int32 *tab, int tab_N, int N, int j) {
@@ -214,9 +222,13 @@ static OPUS_INLINE const opus_int16 *get_p2_twiddle_table(int N, int *tab_N_out)
    }
    *tab_N_out = N;
    if (N == 64) return celt_tx_tab_64_fixed16;
+#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
    if (N == 128) return celt_tx_tab_128_fixed16;
    if (N == 256) return celt_tx_tab_256_fixed16;
    return celt_tx_tab_512_fixed16;
+#else
+   return NULL;
+#endif
 }
 
 static OPUS_INLINE cpx lookup_p2_twiddle_fixed16(const opus_int16 *tab, int tab_N, int N, int j) {
@@ -399,6 +411,7 @@ static void celt_tx_fft64_float(cpx *dst, const cpx *src)
     celt_tx_fft_sr_combine_float(dst, cos, 8);
 }
 
+#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
 static void celt_tx_fft128_float(cpx *dst, const cpx *src)
 {
     const float *cos = celt_tx_tab_128_float;
@@ -425,6 +438,7 @@ static void celt_tx_fft512_float(cpx *dst, const cpx *src)
     celt_tx_fft128_float(dst + 384, src + 384);
     celt_tx_fft_sr_combine_float(dst, cos, 64);
 }
+#endif
 
 static void celt_tx_fft_sr_c(cpx *dst, const cpx *src, int N)
 {
@@ -435,9 +449,11 @@ static void celt_tx_fft_sr_c(cpx *dst, const cpx *src, int N)
       case  16: celt_tx_fft16_float(dst, src); break;
       case  32: celt_tx_fft32_float(dst, src); break;
       case  64: celt_tx_fft64_float(dst, src); break;
+#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
       case 128: celt_tx_fft128_float(dst, src); break;
       case 256: celt_tx_fft256_float(dst, src); break;
       case 512: celt_tx_fft512_float(dst, src); break;
+#endif
       default: celt_assert2(0, "Unsupported Split-Radix FFT size");
    }
 }

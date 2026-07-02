@@ -558,6 +558,7 @@ const opus_int16 celt_tx_p2_map_64[64] = {
    8, 56, 16, 32,
 };
 
+#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
 const opus_int16 celt_tx_mdct_map_64[64] = {
    0, 48, 56, 8, 32, 16, 24, 40, 60, 44, 28, 12,
    4, 52, 36, 20, 62, 46, 54, 6, 30, 14, 22, 38,
@@ -740,6 +741,7 @@ const opus_int16 celt_tx_mdct_map_1024[1024] = {
    16, 400, 208, 368, 112, 496, 160, 288, 32, 416, 224, 320,
    64, 448, 128, 256,
 };
+#endif
 
 #ifndef FIXED_POINT
 /* FFT Twiddle Tables (Float) */
@@ -759,6 +761,7 @@ const float celt_tx_tab_64_float[17] = {
    0.382683426f, 0.290284663f, 0.195090324f, 0.0980171412f, 0.0f,
 };
 
+#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
 const float celt_tx_tab_128_float[33] = {
    1.0f, 0.99879545f, 0.99518472f, 0.989176512f, 0.980785251f, 0.970031261f,
    0.956940353f, 0.941544056f, 0.923879504f, 0.903989315f, 0.881921291f, 0.857728601f,
@@ -806,6 +809,7 @@ const float celt_tx_tab_512_float[129] = {
    0.0980171412f, 0.0857973099f, 0.0735645667f, 0.061320737f, 0.0490676761f, 0.0368072242f,
    0.024541229f, 0.0122715384f, 0.0f,
 };
+#endif
 
 #else /* FIXED_POINT */
 # ifdef ENABLE_QEXT
@@ -826,6 +830,7 @@ const opus_int32 celt_tx_tab_64_fixed32[17] = {
    821806400L, 623381567L, 418953281L, 210490208L, 0L,
 };
 
+#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
 const opus_int32 celt_tx_tab_128_fixed32[33] = {
    2147483647L, 2144896897L, 2137142913L, 2124240385L, 2106220289L, 2083126271L,
    2055013760L, 2021950464L, 1984016128L, 1941302272L, 1893911551L, 1841958145L,
@@ -873,6 +878,7 @@ const opus_int32 celt_tx_tab_512_fixed32[129] = {
    210490208L, 184248320L, 157978704L, 131685280L, 105372032L, 79042912L,
    52701888L, 26352928L, 0L,
 };
+#endif
 
 # else /* !ENABLE_QEXT */
 /* FFT Twiddle Tables (Fixed16 - Q15) */
@@ -892,6 +898,7 @@ const opus_int16 celt_tx_tab_64_fixed16[17] = {
    0,
 };
 
+#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
 const opus_int16 celt_tx_tab_128_fixed16[33] = {
    32767, 32729, 32610, 32413, 32138, 31786, 31357, 30853,
    30274, 29622, 28899, 28106, 27246, 26320, 25330, 24279,
@@ -931,9 +938,11 @@ const opus_int16 celt_tx_tab_512_fixed16[129] = {
    3212, 2811, 2411, 2009, 1608, 1206, 804, 402,
    0,
 };
+#endif
 
 # endif /* ENABLE_QEXT */
 #endif /* FIXED_POINT */
+#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
 /* Bridge map for FFT size 16 */
 const opus_int16 celt_tx_bridge_map_16[16] = {
    0, 4, 1, 5, 2, 6, 3, 7, 8, 10, 9, 11, 12, 14, 13, 15,
@@ -983,7 +992,7 @@ const opus_int16 celt_tx_bridge_map_256[256] = {
    208, 212, 209, 213, 210, 214, 211, 215, 216, 220, 217, 221, 218, 222, 219, 223,
    224, 228, 225, 229, 226, 230, 227, 231, 232, 234, 233, 235, 236, 238, 237, 239,
    240, 244, 241, 245, 242, 246, 243, 247, 248, 250, 249, 251, 252, 254, 253, 255,
-};
+ };
 
 /* Bridge map for FFT size 512 */
 const opus_int16 celt_tx_bridge_map_512[512] = {
@@ -1019,6 +1028,7 @@ const opus_int16 celt_tx_bridge_map_512[512] = {
    464, 468, 465, 469, 466, 470, 467, 471, 472, 476, 473, 477, 474, 478, 475, 479,
    480, 484, 481, 485, 482, 486, 483, 487, 488, 490, 489, 491, 492, 494, 493, 495,
    496, 500, 497, 501, 498, 502, 499, 503, 504, 508, 505, 509, 506, 510, 507, 511,
-};
+ };
+#endif
 
 #endif /* NEED_CELT_TX_TABLES */

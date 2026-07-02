@@ -552,6 +552,7 @@ void opus_fft_free(const kiss_fft_state *cfg, int arch)
 
 #endif /* CUSTOM_MODES */
 
+#if !defined(OPUS_USE_PFA_MDCT) || defined(OPUS_CUSTOM) || defined(ENABLE_DEEP_PLC)
 #ifdef FIXED_POINT
 #ifndef OVERRIDE_fft_downshift
 static void fft_downshift(kiss_fft_cpx *x, int N, int *total, int step) {
@@ -629,6 +630,7 @@ void opus_fft_impl(const kiss_fft_state *st,kiss_fft_cpx *fout ARG_FIXED(int dow
     }
     fft_downshift(fout, st->nfft, &downshift, downshift);
 }
+#endif /* !OPUS_USE_PFA_MDCT || OPUS_CUSTOM || ENABLE_DEEP_PLC */
 #endif
 
 void opus_fft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *fout)

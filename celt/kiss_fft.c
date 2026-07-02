@@ -488,6 +488,13 @@ kiss_fft_state *opus_fft_alloc_twiddles(int nfft,void * mem,size_t * lenmem,
 #else
         st->scale = 1.f/nfft;
 #endif
+#if defined(OPUS_USE_PFA_MDCT)
+        if (nfft == 60 || nfft == 120 || nfft == 240 || nfft == 480 || nfft == 960)
+        {
+           st->twiddles = NULL;
+           st->shift = -1;
+        } else
+#endif
         if (base != NULL)
         {
            st->twiddles = base->twiddles;

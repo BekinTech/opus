@@ -151,6 +151,7 @@ static const unsigned char qext_cache_caps50[112] = {
 
 #ifndef FFT_TWIDDLES48000_960
 #define FFT_TWIDDLES48000_960
+#if !defined(OPUS_USE_PFA_MDCT)
 static const kiss_twiddle_cpx fft_twiddles48000_960[480] = {
 #ifdef ENABLE_QEXT
 {2147483647, 0}, {2147299668, -28109692},
@@ -636,6 +637,8 @@ static const kiss_twiddle_cpx fft_twiddles48000_960[480] = {
 {32757, 858}, {32765, 429},
 #endif
 };
+#endif /* !OPUS_USE_PFA_MDCT */
+#endif
 #ifndef FFT_BITREV480
 #define FFT_BITREV480
 static const opus_int16 fft_bitrev480[480] = {
@@ -733,7 +736,11 @@ static const kiss_fft_state fft_state48000_960_0 = {
 -1,    /* shift */
 {5, 96, 3, 32, 4, 8, 2, 4, 4, 1, 0, 0, 0, 0, 0, 0, },    /* factors */
 fft_bitrev480,    /* bitrev */
-fft_twiddles48000_960,    /* bitrev */
+#if defined(OPUS_USE_PFA_MDCT)
+NULL,    /* twiddles */
+#else
+fft_twiddles48000_960,    /* twiddles */
+#endif
 #ifdef OVERRIDE_FFT
 (arch_fft_state *)&cfg_arch_480,
 #else
@@ -755,7 +762,11 @@ static const kiss_fft_state fft_state48000_960_1 = {
 1,    /* shift */
 {5, 48, 3, 16, 4, 4, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, },    /* factors */
 fft_bitrev240,    /* bitrev */
-fft_twiddles48000_960,    /* bitrev */
+#if defined(OPUS_USE_PFA_MDCT)
+NULL,    /* twiddles */
+#else
+fft_twiddles48000_960,    /* twiddles */
+#endif
 #ifdef OVERRIDE_FFT
 (arch_fft_state *)&cfg_arch_240,
 #else
@@ -777,7 +788,11 @@ static const kiss_fft_state fft_state48000_960_2 = {
 2,    /* shift */
 {5, 24, 3, 8, 2, 4, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, },    /* factors */
 fft_bitrev120,    /* bitrev */
-fft_twiddles48000_960,    /* bitrev */
+#if defined(OPUS_USE_PFA_MDCT)
+NULL,    /* twiddles */
+#else
+fft_twiddles48000_960,    /* twiddles */
+#endif
 #ifdef OVERRIDE_FFT
 (arch_fft_state *)&cfg_arch_120,
 #else
@@ -799,15 +814,17 @@ static const kiss_fft_state fft_state48000_960_3 = {
 3,    /* shift */
 {5, 12, 3, 4, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },    /* factors */
 fft_bitrev60,    /* bitrev */
-fft_twiddles48000_960,    /* bitrev */
+#if defined(OPUS_USE_PFA_MDCT)
+NULL,    /* twiddles */
+#else
+fft_twiddles48000_960,    /* twiddles */
+#endif
 #ifdef OVERRIDE_FFT
 (arch_fft_state *)&cfg_arch_60,
 #else
 NULL,
 #endif
 };
-#endif
-
 #endif
 
 #ifndef MDCT_TWIDDLES960
@@ -1756,6 +1773,7 @@ static const unsigned char qext_cache_caps50[112] = {
 
 #ifndef FFT_TWIDDLES96000_1920
 #define FFT_TWIDDLES96000_1920
+#if !defined(OPUS_USE_PFA_MDCT)
 static const kiss_twiddle_cpx fft_twiddles96000_1920[960] = {
 #ifdef ENABLE_QEXT
 {2147483647, 0}, {2147437652, -14055147},
@@ -2721,6 +2739,8 @@ static const kiss_twiddle_cpx fft_twiddles96000_1920[960] = {
 {32765, 429}, {32767, 214},
 #endif
 };
+#endif /* !OPUS_USE_PFA_MDCT */
+#endif
 #ifndef FFT_BITREV960
 #define FFT_BITREV960
 static const opus_int16 fft_bitrev960[960] = {
@@ -2878,7 +2898,11 @@ static const kiss_fft_state fft_state96000_1920_0 = {
 -1,    /* shift */
 {5, 192, 3, 64, 4, 16, 4, 4, 4, 1, 0, 0, 0, 0, 0, 0, },    /* factors */
 fft_bitrev960,    /* bitrev */
-fft_twiddles96000_1920,    /* bitrev */
+#if defined(OPUS_USE_PFA_MDCT)
+NULL,    /* twiddles */
+#else
+fft_twiddles96000_1920,    /* twiddles */
+#endif
 #ifdef OVERRIDE_FFT
 (arch_fft_state *)&cfg_arch_960,
 #else
@@ -2900,7 +2924,11 @@ static const kiss_fft_state fft_state96000_1920_1 = {
 1,    /* shift */
 {5, 96, 3, 32, 4, 8, 2, 4, 4, 1, 0, 0, 0, 0, 0, 0, },    /* factors */
 fft_bitrev480,    /* bitrev */
-fft_twiddles96000_1920,    /* bitrev */
+#if defined(OPUS_USE_PFA_MDCT)
+NULL,    /* twiddles */
+#else
+fft_twiddles96000_1920,    /* twiddles */
+#endif
 #ifdef OVERRIDE_FFT
 (arch_fft_state *)&cfg_arch_480,
 #else
@@ -2922,7 +2950,11 @@ static const kiss_fft_state fft_state96000_1920_2 = {
 2,    /* shift */
 {5, 48, 3, 16, 4, 4, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, },    /* factors */
 fft_bitrev240,    /* bitrev */
-fft_twiddles96000_1920,    /* bitrev */
+#if defined(OPUS_USE_PFA_MDCT)
+NULL,    /* twiddles */
+#else
+fft_twiddles96000_1920,    /* twiddles */
+#endif
 #ifdef OVERRIDE_FFT
 (arch_fft_state *)&cfg_arch_240,
 #else
@@ -2944,15 +2976,17 @@ static const kiss_fft_state fft_state96000_1920_3 = {
 3,    /* shift */
 {5, 24, 3, 8, 2, 4, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, },    /* factors */
 fft_bitrev120,    /* bitrev */
-fft_twiddles96000_1920,    /* bitrev */
+#if defined(OPUS_USE_PFA_MDCT)
+NULL,    /* twiddles */
+#else
+fft_twiddles96000_1920,    /* twiddles */
+#endif
 #ifdef OVERRIDE_FFT
 (arch_fft_state *)&cfg_arch_120,
 #else
 NULL,
 #endif
 };
-#endif
-
 #endif
 
 #ifndef MDCT_TWIDDLES1920

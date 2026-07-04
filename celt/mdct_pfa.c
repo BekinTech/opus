@@ -31,6 +31,7 @@
 #if defined(OPUS_USE_PFA_MDCT)
 
 #include "mdct.h"
+#include "kiss_fft.h"
 #include "_kiss_fft_guts.h"
 #include "stack_alloc.h"
 #include "mathops.h"
@@ -747,461 +748,6 @@ static const struct OpusTXContext *celt_tx_mdct_kernel_c(int len)
    }
 }
 
-static void celt_tx_mdct_inv_c(const struct OpusTXContext *s, kiss_fft_scalar *out, const kiss_fft_scalar *in, int stride ARG_FIXED(int pre_shift) ARG_FIXED(int fft_shift) ARG_FIXED(int post_shift)) {
-   int i;
-   int N2 = s->len;
-   int N4 = N2 >> 1;
-   cpx *z = (cpx *)out;
-
-   (void)stride;
-
-#ifndef FIXED_POINT
-   VARDECL(cpx, z_temp);
-   const kiss_fft_scalar *exp = s->exp;
-   const int len2 = N4;
-   const int len4 = N2 >> 2;
-   const opus_int16 *sub_map = s->map;
-   const kiss_fft_scalar *in1 = in;
-   const kiss_fft_scalar *in2 = in + ((len2 * 2) - 1) * stride;
-
-   /* Pre-rotation */
-   if (stride == 1) {
-      if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
-         for (i = 0; i < len2; i++) {
-            int k = sub_map[i];
-            kiss_twiddle_scalar exp_r = exp[k];
-            kiss_twiddle_scalar exp_i = exp[k + 1];
-            float re_in = in2[-k];
-            float im_in = in1[k];
-            z[i].r = im_in * exp_i - re_in * exp_r;
-            z[i].i = re_in * exp_i + im_in * exp_r;
-         }
-      } else {
-         for (i = 0; i < len2; i++) {
-            int k = sub_map[i];
-            kiss_twiddle_scalar exp_r = exp[k];
-            kiss_twiddle_scalar exp_i = exp[k + 1];
-            float re_in = in2[-k];
-            float im_in = in1[k];
-            z[i].r = re_in * exp_r - im_in * exp_i;
-            z[i].i = re_in * exp_i + im_in * exp_r;
-         }
-      }
-   } else {
-      if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
-         for (i = 0; i < len2; i++) {
-            int k = sub_map[i];
-            kiss_twiddle_scalar exp_r = exp[k];
-            kiss_twiddle_scalar exp_i = exp[k + 1];
-            float re_in = in2[-k*stride];
-            float im_in = in1[k*stride];
-            z[i].r = im_in * exp_i - re_in * exp_r;
-            z[i].i = re_in * exp_i + im_in * exp_r;
-         }
-      } else {
-         for (i = 0; i < len2; i++) {
-            int k = sub_map[i];
-            kiss_twiddle_scalar exp_r = exp[k];
-            kiss_twiddle_scalar exp_i = exp[k + 1];
-            float re_in = in2[-k*stride];
-            float im_in = in1[k*stride];
-            z[i].r = re_in * exp_r - im_in * exp_i;
-            z[i].i = re_in * exp_i + im_in * exp_r;
-         }
-      }
-   }
-
-   if (s->bridge_map != NULL) {
-      ALLOC(z_temp, len2, cpx);
-      for (i = 0; i < len2; i++) {
-         z_temp[i] = z[s->bridge_map[i]];
-      }
-      for (i = 0; i < len2; i++) {
-         z[i] = z_temp[i];
-      }
-   }
-
-   /* FFT */
-   if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
-      celt_tx_fft_pfa_15xM_ns_c(s->sub, z, z, 1);
-   } else {
-      celt_tx_fft_sr_c(z, z, len2);
-   }
-
-   /* Post-rotation (reuse pre-rotation table for CELT) */
-   if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
-      /* PFA Post-rotation (standard) */
-      for (i = 0; i < len4; i++) {
-         int i0 = i;
-         int i1 = len2 - 1 - i;
-         cpx z0 = z[i0];
-         cpx z1 = z[i1];
-         kiss_twiddle_scalar e0_r = exp[2 * i0];     /* -sin */
-         kiss_twiddle_scalar e0_i = exp[2 * i0 + 1]; /*  cos */
-         kiss_twiddle_scalar e1_r = exp[2 * i1];     /* -sin */
-         kiss_twiddle_scalar e1_i = exp[2 * i1 + 1]; /*  cos */
-         float r0_r = z0.i * e0_i + z0.r * e0_r;
-         float r0_i = z0.i * e0_r - z0.r * e0_i;
-         float r1_r = z1.i * e1_i + z1.r * e1_r;
-         float r1_i = z1.i * e1_r - z1.r * e1_i;
-         z[i0] = (cpx){r0_r, r1_i};
-         z[i1] = (cpx){r1_r, r0_i};
-      }
-   } else {
-      /* Power-of-two Post-rotation */
-      for (i = 0; i < len4; i++) {
-         const int i0 = len4 + i;
-         const int i1 = len4 - i - 1;
-         cpx src1 = (cpx){ z[i1].i, z[i1].r };
-         cpx src0 = (cpx){ z[i0].i, z[i0].r };
-         kiss_twiddle_scalar exp1_r = exp[2 * i1];
-         kiss_twiddle_scalar exp1_i = exp[2 * i1 + 1];
-         kiss_twiddle_scalar exp0_r = exp[2 * i0];
-         kiss_twiddle_scalar exp0_i = exp[2 * i0 + 1];
-
-         z[i1].r = src1.r * exp1_i - src1.i * exp1_r;
-         z[i0].i = src1.r * exp1_r + src1.i * exp1_i;
-
-         z[i0].r = src0.r * exp0_i - src0.i * exp0_r;
-         z[i1].i = src0.r * exp0_r + src0.i * exp0_i;
-      }
-   }
-#else
-   const kiss_twiddle_scalar *trig = (const kiss_twiddle_scalar *)s->exp;
-   if (stride == 1) {
-      for (i = 0; i < N4; i++) {
-         int k = s->map[i];
-         int j = k >> 1;
-         kiss_fft_scalar im = in[k];
-         kiss_fft_scalar re = in[N2 - 1 - k];
-         kiss_twiddle_scalar trig_r = trig[2 * j];     /* -sin(theta_j) */
-         kiss_twiddle_scalar trig_i = trig[2 * j + 1]; /*  cos(theta_j) */
-         re = SHL32_ovflw(re, pre_shift);
-         im = SHL32_ovflw(im, pre_shift);
-         z[i].r = SUB32_ovflw(S_MUL(im, trig_i), S_MUL(re, trig_r));
-         z[i].i = ADD32_ovflw(S_MUL(re, trig_i), S_MUL(im, trig_r));
-      }
-   } else {
-      for (i = 0; i < N4; i++) {
-         int k = s->map[i];
-         int j = k >> 1;
-         kiss_fft_scalar im = in[k * stride];
-         kiss_fft_scalar re = in[(N2 - 1 - k) * stride];
-         kiss_twiddle_scalar trig_r = trig[2 * j];     /* -sin(theta_j) */
-         kiss_twiddle_scalar trig_i = trig[2 * j + 1]; /*  cos(theta_j) */
-         re = SHL32_ovflw(re, pre_shift);
-         im = SHL32_ovflw(im, pre_shift);
-         z[i].r = SUB32_ovflw(S_MUL(im, trig_i), S_MUL(re, trig_r));
-         z[i].i = ADD32_ovflw(S_MUL(re, trig_i), S_MUL(im, trig_r));
-      }
-   }
-
-   if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
-      celt_tx_fft_pfa_15xM_ns_c(s->sub, z, z, 1 ARG_FIXED(fft_shift));
-      /* PFA Post-rotation (standard) */
-      for (i = 0; i < N4 / 2; i++) {
-         int i0 = i;
-         int i1 = N4 - 1 - i;
-         cpx z0 = z[i0];
-         cpx z1 = z[i1];
-         kiss_twiddle_scalar e0_r = trig[2 * i0];     /* -sin */
-         kiss_twiddle_scalar e0_i = trig[2 * i0 + 1]; /*  cos */
-         kiss_twiddle_scalar e1_r = trig[2 * i1];     /* -sin */
-         kiss_twiddle_scalar e1_i = trig[2 * i1 + 1]; /*  cos */
-         kiss_fft_scalar r0_r = PSHR32_ovflw(ADD32_ovflw(S_MUL(z0.i, e0_i), S_MUL(z0.r, e0_r)), post_shift);
-         kiss_fft_scalar r0_i = PSHR32_ovflw(SUB32_ovflw(S_MUL(z0.i, e0_r), S_MUL(z0.r, e0_i)), post_shift);
-         kiss_fft_scalar r1_r = PSHR32_ovflw(ADD32_ovflw(S_MUL(z1.i, e1_i), S_MUL(z1.r, e1_r)), post_shift);
-         kiss_fft_scalar r1_i = PSHR32_ovflw(SUB32_ovflw(S_MUL(z1.i, e1_r), S_MUL(z1.r, e1_i)), post_shift);
-         z[i0] = (cpx){r0_r, r1_i};
-         z[i1] = (cpx){r1_r, r0_i};
-      }
-   } else {
-      celt_assert2(0, "Power-of-two MDCT called in fixed point");
-   }
-#endif
-}
-
-void clt_mdct_backward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
-      kiss_fft_scalar * OPUS_RESTRICT out,
-      const celt_coef * OPUS_RESTRICT window,
-      int overlap, int shift, int stride, int arch)
-{
-   int i;
-   int N = l->n >> shift;
-   int N2 = N >> 1;
-   const struct OpusTXContext *tpl = celt_tx_mdct_kernel_c(N2);
-   const kiss_twiddle_scalar *trig;
-   int cur_n;
-   int pre_shift = 0;
-   int post_shift = 0;
-   int fft_shift = 0;
-   VARDECL(cpx, tmp);
-   SAVE_STACK;
-
-   if (tpl == NULL) {
-#if defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API)
-      clt_mdct_backward_c(l, in, out, window, overlap, shift, stride, arch);
-      return;
-#else
-      celt_assert2(0, "PFA IMDCT called with unsupported size in non-custom mode");
-#endif
-   }
-
-   trig = l->trig;
-   cur_n = l->n;
-   for (i = 0; i < shift; i++) {
-      cur_n >>= 1;
-      trig += cur_n;
-   }
-
-#ifdef FIXED_POINT
-   {
-      opus_val32 sumval = N2;
-      opus_val32 maxval = 0;
-      for (i = 0; i < N2; i++) {
-         maxval = MAX32(maxval, ABS32(in[i * stride]));
-         sumval = ADD32_ovflw(sumval, ABS32(SHR32(in[i * stride], 11)));
-      }
-      pre_shift = IMAX(0, 29 - celt_zlog2(1 + maxval));
-      post_shift = IMAX(0, 19 - celt_ilog2(ABS32(sumval)));
-      post_shift = IMIN(post_shift, pre_shift);
-      fft_shift = pre_shift - post_shift;
-   }
-#else
-   (void)pre_shift;
-   (void)post_shift;
-   (void)fft_shift;
-#endif
-
-   if (tpl->sub != NULL) {
-      ALLOC(tmp, N2 / 2, cpx);
-      struct OpusTXContext mdct = *tpl;
-      struct OpusTXContext pfa = *tpl->sub;
-      pfa.tmp = tmp;
-      mdct.sub = &pfa;
-      mdct.exp = trig;
-      celt_tx_mdct_inv_c(&mdct, out + (overlap >> 1), in, stride ARG_FIXED(pre_shift) ARG_FIXED(fft_shift) ARG_FIXED(post_shift));
-   } else {
-      struct OpusTXContext mdct = *tpl;
-      mdct.exp = trig;
-      celt_tx_mdct_inv_c(&mdct, out + (overlap >> 1), in, stride ARG_FIXED(pre_shift) ARG_FIXED(fft_shift) ARG_FIXED(post_shift));
-   }
-
-   {
-      kiss_fft_scalar * OPUS_RESTRICT xp1 = out + overlap - 1;
-      kiss_fft_scalar * OPUS_RESTRICT yp1 = out;
-      const celt_coef * OPUS_RESTRICT wp1 = window;
-      const celt_coef * OPUS_RESTRICT wp2 = window + overlap - 1;
-
-      for (i = 0; i < overlap / 2; i++) {
-         kiss_fft_scalar x1 = *xp1;
-         kiss_fft_scalar x2 = *yp1;
-         *yp1++ = SUB32_ovflw(S_MUL(x2, *wp2), S_MUL(x1, *wp1));
-         *xp1-- = ADD32_ovflw(S_MUL(x2, *wp1), S_MUL(x1, *wp2));
-         wp1++;
-         wp2--;
-      }
-   }
-   RESTORE_STACK;
-}
-
-static void celt_tx_mdct_fwd_c(const struct OpusTXContext *s, kiss_fft_scalar *out, const kiss_fft_scalar *in,
-      const celt_coef *window, int overlap, int stride ARG_FIXED(celt_coef scale) ARG_FIXED(int scale_shift)) {
-   int i;
-   int N2 = s->len;
-   int N4 = N2 >> 1;
-   const kiss_twiddle_scalar *trig;
-   VARDECL(kiss_fft_scalar, f);
-   VARDECL(cpx, z);
-   SAVE_STACK;
-   ALLOC(f, N2, kiss_fft_scalar);
-   ALLOC(z, N4, cpx);
-   trig = (const kiss_twiddle_scalar *)s->exp;
-#ifdef FIXED_POINT
-   int headroom = 0;
-#endif
-
-   /* Window, shuffle, fold */
-   {
-      const kiss_fft_scalar * OPUS_RESTRICT xp1 = in + (overlap >> 1);
-      const kiss_fft_scalar * OPUS_RESTRICT xp2 = in + N2 - 1 + (overlap >> 1);
-      kiss_fft_scalar * OPUS_RESTRICT yp = f;
-      const celt_coef * OPUS_RESTRICT wp1 = window + (overlap >> 1);
-      const celt_coef * OPUS_RESTRICT wp2 = window + (overlap >> 1) - 1;
-      for (i = 0; i < ((overlap + 3) >> 2); i++) {
-         *yp++ = ADD32_ovflw(S_MUL(xp1[N2], *wp2), S_MUL(*xp2, *wp1));
-         *yp++ = SUB32_ovflw(S_MUL(*xp1, *wp1), S_MUL(xp2[-N2], *wp2));
-         xp1 += 2; xp2 -= 2; wp1 += 2; wp2 -= 2;
-      }
-      wp1 = window;
-      wp2 = window + overlap - 1;
-      for (; i < N4 - ((overlap + 3) >> 2); i++) {
-         *yp++ = *xp2;
-         *yp++ = *xp1;
-         xp1 += 2; xp2 -= 2;
-      }
-      for (; i < N4; i++) {
-         *yp++ = ADD32_ovflw(S_MUL(-xp1[-N2], *wp1), S_MUL(*xp2, *wp2));
-         *yp++ = ADD32_ovflw(S_MUL(*xp1, *wp2), S_MUL(xp2[N2], *wp1));
-         xp1 += 2; xp2 -= 2; wp1 += 2; wp2 -= 2;
-      }
-   }
-
-   /* Pre-rotation and scaling */
-   {
-#ifndef FIXED_POINT
-      float scale = 1.0f / N4;
-#else
-      opus_val32 maxval = 1;
-#endif
-      for (i = 0; i < N4; i++) {
-         int k = s->map[i];
-         int j = k >> 1;
-         kiss_twiddle_scalar t0 = trig[2 * j];      /* -sin */
-         kiss_twiddle_scalar t1 = trig[2 * j + 1];  /*  cos */
-         kiss_fft_scalar re = f[k];
-         kiss_fft_scalar im = f[k + 1];
-#ifdef FIXED_POINT
-         kiss_fft_scalar yr = SUB32_ovflw(S_MUL(re, t1), S_MUL(im, t0));
-         kiss_fft_scalar yi = ADD32_ovflw(S_MUL(im, t1), S_MUL(re, t0));
-#ifdef ENABLE_QEXT
-         z[i].r = yr;
-         z[i].i = yi;
-#else
-         z[i].r = S_MUL2(yr, scale);
-         z[i].i = S_MUL2(yi, scale);
-#endif
-         maxval = MAX32(maxval, MAX32(ABS32(z[i].r), ABS32(z[i].i)));
-#else
-         float yr = re * t1 - im * t0;
-         float yi = im * t1 + re * t0;
-         z[i] = (cpx){yr * scale, yi * scale};
-#endif
-      }
-#ifdef FIXED_POINT
-      headroom = IMAX(0, IMIN(scale_shift, 28 - celt_ilog2(maxval)));
-#endif
-   }
-   /* Transform core */
-#ifdef FIXED_POINT
-   int fft_shift = scale_shift - headroom;
-#endif
-   if (s->fn == celt_tx_fft_pfa_15xM_ns_c) {
-      celt_tx_fft_pfa_15xM_ns_c(s->sub, z, z, 1 ARG_FIXED(fft_shift));
-      /* PFA Post-rotation */
-      for (i = 0; i < N4; i++) {
-         kiss_twiddle_scalar t0 = trig[2 * i];      /* -sin */
-         kiss_twiddle_scalar t1 = trig[2 * i + 1];  /*  cos */
-         cpx fp = z[i];
-         kiss_fft_scalar fp_r = fp.r;
-         kiss_fft_scalar fp_i = fp.i;
-#ifdef FIXED_POINT
-#ifdef ENABLE_QEXT
-         t0 = S_MUL2(t0, scale);
-         t1 = S_MUL2(t1, scale);
-#endif
-         kiss_fft_scalar yr = PSHR32(SUB32_ovflw(S_MUL(fp_i, t0), S_MUL(fp_r, t1)), headroom);
-         kiss_fft_scalar yi = PSHR32(ADD32_ovflw(S_MUL(fp_r, t0), S_MUL(fp_i, t1)), headroom);
-#else
-         float yr = fp_i * t0 - fp_r * t1;
-         float yi = fp_r * t0 + fp_i * t1;
-#endif
-         out[2 * i * stride] = yr;
-         out[(N2 - 1 - 2 * i) * stride] = yi;
-      }
-   } else {
-#ifndef FIXED_POINT
-      {
-         VARDECL(cpx, z_temp);
-         if (s->bridge_map != NULL) {
-            ALLOC(z_temp, N4, cpx);
-            for (i = 0; i < N4; i++) {
-               z_temp[i] = z[s->bridge_map[i]];
-            }
-            for (i = 0; i < N4; i++) {
-               z[i] = z_temp[i];
-            }
-         }
-      }
-      celt_tx_fft_sr_c(z, z, N4);
-      /* Power-of-two Post-rotation (reversed input, NO conjugated output) */
-      for (i = 0; i < N4; i++) {
-         kiss_twiddle_scalar t0 = trig[2 * i];      /* -sin */
-         kiss_twiddle_scalar t1 = trig[2 * i + 1];  /*  cos */
-         int idx = i == 0 ? 0 : N4 - i;
-         cpx fp = z[idx];
-         float fp_r = fp.r;
-         float fp_i = fp.i;
-         float yr = fp_i * t0 - fp_r * t1;
-         float yi = fp_r * t0 + fp_i * t1;
-         out[2 * i * stride] = yr;
-         out[(N2 - 1 - 2 * i) * stride] = yi;
-      }
-#else
-      celt_assert2(0, "Power-of-two MDCT called in fixed point");
-#endif
-   }
-   RESTORE_STACK;
-}
-
-void clt_mdct_forward_pfa_c(const mdct_lookup *l, kiss_fft_scalar *in,
-      kiss_fft_scalar * OPUS_RESTRICT out,
-      const celt_coef *window, int overlap, int shift, int stride, int arch) {
-   int i;
-   int N = l->n >> shift;
-   int N2 = N >> 1;
-   const struct OpusTXContext *tpl = celt_tx_mdct_kernel_c(N2);
-   const kiss_twiddle_scalar *trig;
-   int cur_n;
-   const kiss_fft_state *st;
-   int scale_shift = 0;
-   celt_coef scale = 0;
-   VARDECL(cpx, tmp);
-   SAVE_STACK;
-   (void)arch;
-
-   if (tpl == NULL) {
-#if defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API)
-      clt_mdct_forward_c(l, in, out, window, overlap, shift, stride, arch);
-      return;
-#else
-      celt_assert2(0, "PFA MDCT called with unsupported size in non-custom mode");
-#endif
-   }
-
-   trig = l->trig;
-   cur_n = l->n;
-   for (i = 0; i < shift; i++) {
-      cur_n >>= 1;
-      trig += cur_n;
-   }
-
-   st = l->kfft[shift];
-#ifdef FIXED_POINT
-   scale_shift = st->scale_shift - 1;
-   scale = st->scale;
-#else
-   (void)st;
-   (void)scale_shift;
-   (void)scale;
-#endif
-
-   if (tpl->sub != NULL) {
-      ALLOC(tmp, N2 / 2, cpx);
-      struct OpusTXContext mdct = *tpl;
-      struct OpusTXContext pfa = *tpl->sub;
-      pfa.tmp = tmp;
-      mdct.sub = &pfa;
-      mdct.exp = trig;
-      celt_tx_mdct_fwd_c(&mdct, out, in, window, overlap, stride ARG_FIXED(scale) ARG_FIXED(scale_shift));
-   } else {
-      struct OpusTXContext mdct = *tpl;
-      mdct.exp = trig;
-      celt_tx_mdct_fwd_c(&mdct, out, in, window, overlap, stride ARG_FIXED(scale) ARG_FIXED(scale_shift));
-   }
-   RESTORE_STACK;
-}
-
 #if defined(OPUS_USE_PFA_MDCT)
 static void get_pfa_crt_params(int M, int *K3, int *K4)
 {
@@ -1215,71 +761,97 @@ static void get_pfa_crt_params(int M, int *K3, int *K4)
    }
 }
 
-void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *fout)
+void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *fout ARG_FIXED(int downshift))
 {
    int i;
    int nfft = st->nfft;
    int M = nfft / 15;
    int K3, K4;
    const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel_c(2 * nfft);
-   const struct OpusTXContext *tpl = mdct_tpl ? mdct_tpl->sub : NULL;
-   celt_coef scale;
+   const struct OpusTXContext *tpl = (mdct_tpl && mdct_tpl->fn == celt_tx_fft_pfa_15xM_ns_c) ? mdct_tpl->sub : NULL;
    struct OpusTXContext pfa;
-#ifdef FIXED_POINT
-   int downshift;
-#endif
    VARDECL(cpx, tmp);
    VARDECL(cpx, in_perm);
    SAVE_STACK;
+
+#if !defined(OPUS_USE_PFA_MDCT) || defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API) || defined(ENABLE_DEEP_PLC)
+   if (tpl == NULL) {
+      if (fin == fout) {
+         VARDECL(kiss_fft_cpx, tmp_perm);
+         ALLOC(tmp_perm, nfft, kiss_fft_cpx);
+         for (i = 0; i < nfft; i++)
+            tmp_perm[i] = fin[i];
+         for (i = 0; i < nfft; i++)
+            fout[st->bitrev[i]] = tmp_perm[i];
+      } else {
+         for (i = 0; i < nfft; i++)
+            fout[st->bitrev[i]] = fin[i];
+      }
+      opus_fft_impl(st, fout ARG_FIXED(downshift));
+      RESTORE_STACK;
+      return;
+   }
+#else
+   celt_assert2(tpl != NULL, "PFA FFT called with unsupported size in non-custom mode");
+#endif
 
    ALLOC(tmp, nfft, cpx);
    ALLOC(in_perm, nfft, cpx);
 
    get_pfa_crt_params(M, &K3, &K4);
 
-   /* 1. Scale and permute input to grid order: dest = c + r * M */
-   scale = st->scale;
    for (i = 0; i < nfft; i++) {
       int r = celt_tx_pfa_P[(i * K4) % 15];
       int c = (i * K3) % M;
       int dest = r + c * 15;
-#ifdef FIXED_POINT
-      in_perm[dest].r = S_MUL2(fin[i].r, scale);
-      in_perm[dest].i = S_MUL2(fin[i].i, scale);
-#else
-      in_perm[dest].r = fin[i].r * scale;
-      in_perm[dest].i = fin[i].i * scale;
-#endif
+      in_perm[dest] = fin[i];
    }
 
-   /* 2. Run the PFA core forward FFT */
-   if (tpl == NULL) {
-      RESTORE_STACK;
-      return;
-   }
    pfa = *tpl;
    pfa.tmp = tmp;
 
-#ifdef FIXED_POINT
-   downshift = st->scale_shift - 1;
-#endif
    celt_tx_fft_pfa_15xM_ns_c(&pfa, fout, in_perm, 1 ARG_FIXED(downshift));
 
    RESTORE_STACK;
 }
 
-void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *fout)
+void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *fout ARG_FIXED(int fft_shift))
 {
    int i;
    int nfft = st->nfft;
    int M = nfft / 15;
    int K3, K4;
    const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel_c(2 * nfft);
-   const struct OpusTXContext *tpl = mdct_tpl ? mdct_tpl->sub : NULL;
+   const struct OpusTXContext *tpl = (mdct_tpl && mdct_tpl->fn == celt_tx_fft_pfa_15xM_ns_c) ? mdct_tpl->sub : NULL;
    struct OpusTXContext pfa;
    VARDECL(cpx, tmp);
    VARDECL(cpx, in_perm);
    SAVE_STACK;
+
+#if !defined(OPUS_USE_PFA_MDCT) || defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API) || defined(ENABLE_DEEP_PLC)
+   if (tpl == NULL) {
+      if (fin == fout) {
+         VARDECL(kiss_fft_cpx, tmp_perm);
+         ALLOC(tmp_perm, nfft, kiss_fft_cpx);
+         for (i = 0; i < nfft; i++)
+            tmp_perm[i] = fin[i];
+         for (i = 0; i < nfft; i++)
+            fout[st->bitrev[i]] = tmp_perm[i];
+      } else {
+         for (i = 0; i < nfft; i++)
+            fout[st->bitrev[i]] = fin[i];
+      }
+      for (i = 0; i < nfft; i++)
+         fout[i].i = -fout[i].i;
+      opus_fft_impl(st, fout ARG_FIXED(fft_shift));
+      for (i = 0; i < nfft; i++)
+         fout[i].i = -fout[i].i;
+      RESTORE_STACK;
+      return;
+   }
+#else
+   celt_assert2(tpl != NULL, "PFA IFFT called with unsupported size in non-custom mode");
+#endif
 
    ALLOC(tmp, nfft, cpx);
    ALLOC(in_perm, nfft, cpx);
@@ -1294,14 +866,9 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
       in_perm[dest] = fin[i];
    }
 
-   /* 2. Run the PFA core forward FFT (downshift = 0) */
-   if (tpl == NULL) {
-      RESTORE_STACK;
-      return;
-   }
    pfa = *tpl;
    pfa.tmp = tmp;
-   celt_tx_fft_pfa_15xM_ns_c(&pfa, fout, in_perm, 1 ARG_FIXED(0));
+   celt_tx_fft_pfa_15xM_ns_c(&pfa, fout, in_perm, 1 ARG_FIXED(fft_shift));
 
    /* 3. Time-reverse the output from index 1 to N-1 to obtain inverse DFT */
    for (i = 1; i < (nfft + 1) / 2; i++) {

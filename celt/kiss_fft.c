@@ -47,8 +47,8 @@
 
 
 #if defined(OPUS_USE_PFA_MDCT)
-extern void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *fout);
-extern void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *fout);
+extern void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *fout ARG_FIXED(int downshift));
+extern void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *fout ARG_FIXED(int fft_shift));
 #endif
 
 #ifndef M_PI
@@ -638,7 +638,22 @@ void opus_fft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *f
 #if defined(OPUS_USE_PFA_MDCT)
    if (st->nfft == 60 || st->nfft == 120 || st->nfft == 240 || st->nfft == 480 || st->nfft == 960)
    {
-      opus_fft_pfa_c(st, fin, fout);
+      int i;
+      celt_coef scale = st->scale;
+      VARDECL(kiss_fft_cpx, tmp);
+      SAVE_STACK;
+      ALLOC(tmp, st->nfft, kiss_fft_cpx);
+      for (i = 0; i < st->nfft; i++) {
+#ifndef FIXED_POINT
+         tmp[i].r = fin[i].r * scale;
+         tmp[i].i = fin[i].i * scale;
+#else
+         tmp[i].r = S_MUL2(fin[i].r, scale);
+         tmp[i].i = S_MUL2(fin[i].i, scale);
+#endif
+      }
+      opus_fft_pfa_c(st, tmp, fout ARG_FIXED(st->scale_shift - 1));
+      RESTORE_STACK;
       return;
    }
 #if !defined(OPUS_CUSTOM) && !defined(ENABLE_DEEP_PLC)
@@ -674,7 +689,7 @@ void opus_ifft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *
 #if defined(OPUS_USE_PFA_MDCT)
    if (st->nfft == 60 || st->nfft == 120 || st->nfft == 240 || st->nfft == 480 || st->nfft == 960)
    {
-      opus_ifft_pfa_c(st, fin, fout);
+      opus_ifft_pfa_c(st, fin, fout ARG_FIXED(0));
       return;
    }
 #if !defined(OPUS_CUSTOM) && !defined(ENABLE_DEEP_PLC)

@@ -124,7 +124,6 @@ void clt_mdct_clear(mdct_lookup *l, int arch)
 
 #endif /* CUSTOM_MODES */
 
-#if !defined(OPUS_USE_PFA_MDCT) || defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API)
 /* Forward MDCT trashes the input array */
 #ifndef OVERRIDE_clt_mdct_forward
 void clt_mdct_forward_c(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_scalar * OPUS_RESTRICT out,
@@ -141,7 +140,7 @@ void clt_mdct_forward_c(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_scal
    /* Allows us to scale with MULT16_32_Q16(), which is faster than
       MULT16_32_Q15() on ARM. */
    int scale_shift = st->scale_shift-1;
-   int headroom;
+   int headroom = 0;
 #endif
    SAVE_STACK;
    (void)arch;
@@ -220,17 +219,21 @@ void clt_mdct_forward_c(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_scal
          yi = S_MUL(im,t1)  +  S_MUL(re,t0);
          /* For QEXT, it's best to scale before the FFT, but otherwise it's best to scale after.
             For floating-point it doesn't matter. */
-#ifdef ENABLE_QEXT
-         yc.r = yr;
-         yc.i = yi;
-#else
+#ifndef ENABLE_QEXT
          yc.r = S_MUL2(yr, scale);
          yc.i = S_MUL2(yi, scale);
+#else
+         yc.r = yr;
+         yc.i = yi;
 #endif
 #ifdef FIXED_POINT
          maxval = MAX32(maxval, MAX32(ABS32(yc.r), ABS32(yc.i)));
 #endif
+#if defined(OPUS_USE_PFA_MDCT)
+         f2[i] = yc;
+#else
          f2[st->bitrev[i]] = yc;
+#endif
       }
 #ifdef FIXED_POINT
       headroom = IMAX(0, IMIN(scale_shift, 28-celt_ilog2(maxval)));
@@ -238,7 +241,11 @@ void clt_mdct_forward_c(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_scal
    }
 
    /* N/4 complex FFT, does not downscale anymore */
+#if defined(OPUS_USE_PFA_MDCT)
+   opus_fft_pfa_c(st, f2, f2 ARG_FIXED(scale_shift-headroom));
+#else
    opus_fft_impl(st, f2 ARG_FIXED(scale_shift-headroom));
+#endif
 
    /* Post-rotate */
    {
@@ -319,24 +326,40 @@ void clt_mdct_backward_c(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_sca
       const opus_int16 * OPUS_RESTRICT bitrev = l->kfft[shift]->bitrev;
       for(i=0;i<N4;i++)
       {
-         int rev;
+#if defined(OPUS_USE_PFA_MDCT)
          kiss_fft_scalar yr, yi;
          opus_val32 x1, x2;
-         rev = *bitrev++;
          x1 = SHL32_ovflw(*xp1, pre_shift);
          x2 = SHL32_ovflw(*xp2, pre_shift);
          yr = ADD32_ovflw(S_MUL(x2, t[2*i+1]), S_MUL(x1, t[2*i]));
          yi = SUB32_ovflw(S_MUL(x1, t[2*i+1]), S_MUL(x2, t[2*i]));
-         /* We swap real and imag because we use an FFT instead of an IFFT. */
-         yp[2*rev+1] = yr;
-         yp[2*rev] = yi;
+         (void)bitrev;
+         yp[2*i+1] = yr;
+         yp[2*i] = yi;
+#else
+         {
+            int rev = *bitrev++;
+            kiss_fft_scalar yr, yi;
+            opus_val32 x1, x2;
+            x1 = SHL32_ovflw(*xp1, pre_shift);
+            x2 = SHL32_ovflw(*xp2, pre_shift);
+            yr = ADD32_ovflw(S_MUL(x2, t[2*i+1]), S_MUL(x1, t[2*i]));
+            yi = SUB32_ovflw(S_MUL(x1, t[2*i+1]), S_MUL(x2, t[2*i]));
+            yp[2*rev+1] = yr;
+            yp[2*rev] = yi;
+         }
+#endif
          /* Storing the pre-rotation directly in the bitrev order. */
          xp1+=2*stride;
          xp2-=2*stride;
       }
    }
 
+#if defined(OPUS_USE_PFA_MDCT)
+   opus_fft_pfa_c(l->kfft[shift], (kiss_fft_cpx*)(out+(overlap>>1)), (kiss_fft_cpx*)(out+(overlap>>1)) ARG_FIXED(fft_shift));
+#else
    opus_fft_impl(l->kfft[shift], (kiss_fft_cpx*)(out+(overlap>>1)) ARG_FIXED(fft_shift));
+#endif
 
    /* Post-rotate and de-shuffle from both ends of the buffer at once to make
       it in-place. */
@@ -396,4 +419,3 @@ void clt_mdct_backward_c(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_sca
    }
 }
 #endif /* OVERRIDE_clt_mdct_backward */
-#endif

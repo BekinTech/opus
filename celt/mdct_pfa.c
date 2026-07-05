@@ -89,10 +89,6 @@ static void pfa_downshift(cpx *x, int N, int *total, int step) {
 #define PFA_DOWNSHIFT(x, N, total, step) (void)(x); (void)(N); (void)(total); (void)(step)
 #endif
 
-static OPUS_INLINE cpx crot(cpx a) {
-   return (cpx){-a.i, a.r};
-}
-
 typedef struct OpusTXContext OpusTXContext;
 typedef void (*opus_tx_fn)(const OpusTXContext *s, void *out, void *in, ptrdiff_t stride ARG_FIXED(int downshift));
 
@@ -104,14 +100,11 @@ struct OpusTXContext {
    void *tmp;
    const struct OpusTXContext *sub;
    opus_tx_fn fn;
-   const opus_int16 *bridge_map;
 };
 
 #include <stddef.h>
-#include <stdio.h>
-#include <math.h>
 #include "celt_tx_tables.h"
-static inline int split_radix_permutation(int i, int len, int inv)
+static OPUS_INLINE int split_radix_permutation(int i, int len, int inv)
 {
     len >>= 1;
     if (len <= 1)
@@ -535,6 +528,7 @@ static void celt_tx_fft_p2_c(cpx *out, const cpx *in, int N ARG_FIXED(int *downs
  */
 static void winograd_fft3(const cpx *in, cpx *out) {
    kiss_fft_scalar r_sum12, r_diff12, i_sum12, i_diff12;
+   kiss_fft_scalar t1_r, t1_i, t2_r, t2_i;
 
    r_sum12  = ADD32_ovflw(in[1].r, in[2].r);
    r_diff12 = SUB32_ovflw(in[1].r, in[2].r);
@@ -544,7 +538,6 @@ static void winograd_fft3(const cpx *in, cpx *out) {
    out[0].r = ADD32_ovflw(in[0].r, r_sum12);
    out[0].i = ADD32_ovflw(in[0].i, i_sum12);
 
-   kiss_fft_scalar t1_r, t1_i, t2_r, t2_i;
    t1_r = S_MUL(i_diff12, SIN_2PI_3);
    t1_i = S_MUL(r_diff12, SIN_2PI_3);
    t2_r = S_MUL(r_sum12, HALF_VAL);
@@ -559,9 +552,11 @@ static void winograd_fft3(const cpx *in, cpx *out) {
 
 static void decl_fft5(const cpx *in, int r3, cpx *out, int stride) {
    cpx dc = in[0];
-
    kiss_fft_scalar r_sum14, r_diff14, i_sum14, i_diff14;
    kiss_fft_scalar r_sum23, r_diff23, i_sum23, i_diff23;
+   kiss_fft_scalar r_t4, r_t0, i_t4, i_t0;
+   kiss_fft_scalar r_t5, r_t1, i_t5, i_t1;
+   int idx0, idx1, idx2, idx3, idx4;
 
    r_diff14 = SUB32_ovflw(in[1].r, in[4].r);
    r_sum14  = ADD32_ovflw(in[1].r, in[4].r);
@@ -573,27 +568,25 @@ static void decl_fft5(const cpx *in, int r3, cpx *out, int stride) {
    i_diff23 = SUB32_ovflw(in[2].i, in[3].i);
    i_sum23  = ADD32_ovflw(in[2].i, in[3].i);
 
-   int idx0 = (5 * r3) % 15;
+   idx0 = (5 * r3) % 15;
    if (idx0 < 0) idx0 += 15;
    out[idx0 * stride].r = ADD32_ovflw(dc.r, ADD32_ovflw(r_sum14, r_sum23));
    out[idx0 * stride].i = ADD32_ovflw(dc.i, ADD32_ovflw(i_sum14, i_sum23));
 
-   kiss_fft_scalar r_t4, r_t0, i_t4, i_t0;
    r_t4 = SUB32_ovflw(S_MUL(r_sum14, COS_2PI_5), S_MUL(r_sum23, COS_4PI_5));
    r_t0 = SUB32_ovflw(S_MUL(r_sum23, COS_2PI_5), S_MUL(r_sum14, COS_4PI_5));
    i_t4 = SUB32_ovflw(S_MUL(i_sum14, COS_2PI_5), S_MUL(i_sum23, COS_4PI_5));
    i_t0 = SUB32_ovflw(S_MUL(i_sum23, COS_2PI_5), S_MUL(i_sum14, COS_4PI_5));
 
-   kiss_fft_scalar r_t5, r_t1, i_t5, i_t1;
    r_t5 = ADD32_ovflw(S_MUL(i_diff14, SIN_2PI_5), S_MUL(i_diff23, SIN_4PI_5));
    r_t1 = SUB32_ovflw(S_MUL(i_diff14, SIN_4PI_5), S_MUL(i_diff23, SIN_2PI_5));
    i_t5 = NEG32_ovflw(ADD32_ovflw(S_MUL(r_diff14, SIN_2PI_5), S_MUL(r_diff23, SIN_4PI_5)));
    i_t1 = SUB32_ovflw(S_MUL(r_diff23, SIN_2PI_5), S_MUL(r_diff14, SIN_4PI_5));
 
-   int idx1 = (5 * r3 + 3) % 15; if (idx1 < 0) idx1 += 15;
-   int idx2 = (5 * r3 + 6) % 15; if (idx2 < 0) idx2 += 15;
-   int idx3 = (5 * r3 + 9) % 15; if (idx3 < 0) idx3 += 15;
-   int idx4 = (5 * r3 + 12) % 15; if (idx4 < 0) idx4 += 15;
+   idx1 = (5 * r3 + 3) % 15; if (idx1 < 0) idx1 += 15;
+   idx2 = (5 * r3 + 6) % 15; if (idx2 < 0) idx2 += 15;
+   idx3 = (5 * r3 + 9) % 15; if (idx3 < 0) idx3 += 15;
+   idx4 = (5 * r3 + 12) % 15; if (idx4 < 0) idx4 += 15;
 
    out[idx1 * stride].r = ADD32_ovflw(dc.r, ADD32_ovflw(r_t4, r_t5));
    out[idx1 * stride].i = ADD32_ovflw(dc.i, ADD32_ovflw(i_t4, i_t5));
@@ -687,44 +680,28 @@ static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, 
    }
 }
 
-static const struct OpusTXContext celt_tx_p2_4_c   = {  4, 1, celt_tx_p2_map_4,  NULL, NULL, NULL, NULL, NULL };
-static const struct OpusTXContext celt_tx_p2_8_c   = {  8, 1, celt_tx_p2_map_8,  NULL, NULL, NULL, NULL, NULL };
-static const struct OpusTXContext celt_tx_p2_16_c  = { 16, 1, celt_tx_p2_map_16, NULL, NULL, NULL, NULL, NULL };
-static const struct OpusTXContext celt_tx_p2_32_c  = { 32, 1, celt_tx_p2_map_32, NULL, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_p2_4_c   = {  4, 1, celt_tx_p2_map_4,  NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_p2_8_c   = {  8, 1, celt_tx_p2_map_8,  NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_p2_16_c  = { 16, 1, celt_tx_p2_map_16, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_p2_32_c  = { 32, 1, celt_tx_p2_map_32, NULL, NULL, NULL, NULL };
 #if defined(ENABLE_QEXT)
-static const struct OpusTXContext celt_tx_p2_64_c  = { 64, 1, celt_tx_p2_map_64, NULL, NULL, NULL, NULL, NULL };
+static const struct OpusTXContext celt_tx_p2_64_c  = { 64, 1, celt_tx_p2_map_64, NULL, NULL, NULL, NULL };
 #endif
 
-static const struct OpusTXContext celt_tx_pfa_60_c  = {  60, 1, celt_tx_pfa_map_60,  NULL, NULL, &celt_tx_p2_4_c,  NULL, NULL };
-static const struct OpusTXContext celt_tx_pfa_120_c = { 120, 1, celt_tx_pfa_map_120, NULL, NULL, &celt_tx_p2_8_c,  NULL, NULL };
-static const struct OpusTXContext celt_tx_pfa_240_c = { 240, 1, celt_tx_pfa_map_240, NULL, NULL, &celt_tx_p2_16_c, NULL, NULL };
-static const struct OpusTXContext celt_tx_pfa_480_c = { 480, 1, celt_tx_pfa_map_480, NULL, NULL, &celt_tx_p2_32_c, NULL, NULL };
+static const struct OpusTXContext celt_tx_pfa_60_c  = {  60, 1, celt_tx_pfa_map_60,  NULL, NULL, &celt_tx_p2_4_c,  NULL };
+static const struct OpusTXContext celt_tx_pfa_120_c = { 120, 1, celt_tx_pfa_map_120, NULL, NULL, &celt_tx_p2_8_c,  NULL };
+static const struct OpusTXContext celt_tx_pfa_240_c = { 240, 1, celt_tx_pfa_map_240, NULL, NULL, &celt_tx_p2_16_c, NULL };
+static const struct OpusTXContext celt_tx_pfa_480_c = { 480, 1, celt_tx_pfa_map_480, NULL, NULL, &celt_tx_p2_32_c, NULL };
 #if defined(ENABLE_QEXT)
-static const struct OpusTXContext celt_tx_pfa_960_c = { 960, 1, celt_tx_pfa_map_960, NULL, NULL, &celt_tx_p2_64_c, NULL, NULL };
+static const struct OpusTXContext celt_tx_pfa_960_c = { 960, 1, celt_tx_pfa_map_960, NULL, NULL, &celt_tx_p2_64_c, NULL };
 #endif
 
-static const struct OpusTXContext celt_tx_mdct_120_c  = {  120, 1, celt_tx_mdct_map_120,  NULL,  NULL, &celt_tx_pfa_60_c,  celt_tx_fft_pfa_15xM_ns_c, NULL };
-static const struct OpusTXContext celt_tx_mdct_240_c  = {  240, 1, celt_tx_mdct_map_240,  NULL,  NULL, &celt_tx_pfa_120_c, celt_tx_fft_pfa_15xM_ns_c, NULL };
-static const struct OpusTXContext celt_tx_mdct_480_c  = {  480, 1, celt_tx_mdct_map_480,  NULL,  NULL, &celt_tx_pfa_240_c, celt_tx_fft_pfa_15xM_ns_c, NULL };
-static const struct OpusTXContext celt_tx_mdct_960_c  = {  960, 1, celt_tx_mdct_map_960,  NULL,  NULL, &celt_tx_pfa_480_c, celt_tx_fft_pfa_15xM_ns_c, NULL };
+static const struct OpusTXContext celt_tx_mdct_120_c  = {  120, 1, celt_tx_mdct_map_120,  NULL,  NULL, &celt_tx_pfa_60_c,  celt_tx_fft_pfa_15xM_ns_c };
+static const struct OpusTXContext celt_tx_mdct_240_c  = {  240, 1, celt_tx_mdct_map_240,  NULL,  NULL, &celt_tx_pfa_120_c, celt_tx_fft_pfa_15xM_ns_c };
+static const struct OpusTXContext celt_tx_mdct_480_c  = {  480, 1, celt_tx_mdct_map_480,  NULL,  NULL, &celt_tx_pfa_240_c, celt_tx_fft_pfa_15xM_ns_c };
+static const struct OpusTXContext celt_tx_mdct_960_c  = {  960, 1, celt_tx_mdct_map_960,  NULL,  NULL, &celt_tx_pfa_480_c, celt_tx_fft_pfa_15xM_ns_c };
 #if defined(ENABLE_QEXT)
-static const struct OpusTXContext celt_tx_mdct_1920_c = { 1920, 1, celt_tx_mdct_map_1920, NULL, NULL, &celt_tx_pfa_960_c, celt_tx_fft_pfa_15xM_ns_c, NULL };
-#endif
-
-#if defined(CUSTOM_MODES) && !defined(FIXED_POINT)
-/* Dummy sub-contexts for power-of-two sub-FFTs */
-static const struct OpusTXContext celt_tx_sr_32_c  = {  32, 1, NULL, NULL, NULL, NULL, NULL, NULL };
-static const struct OpusTXContext celt_tx_sr_64_c  = {  64, 1, NULL, NULL, NULL, NULL, NULL, NULL };
-static const struct OpusTXContext celt_tx_sr_128_c = { 128, 1, NULL, NULL, NULL, NULL, NULL, NULL };
-static const struct OpusTXContext celt_tx_sr_256_c = { 256, 1, NULL, NULL, NULL, NULL, NULL, NULL };
-static const struct OpusTXContext celt_tx_sr_512_c = { 512, 1, NULL, NULL, NULL, NULL, NULL, NULL };
-
-/* Power-of-two MDCT contexts */
-static const struct OpusTXContext celt_tx_mdct_64_c   = {   64, 1, celt_tx_mdct_map_64,   NULL,   NULL, &celt_tx_sr_32_c,  NULL, celt_tx_bridge_map_32 };
-static const struct OpusTXContext celt_tx_mdct_128_c  = {  128, 1, celt_tx_mdct_map_128,  NULL,  NULL, &celt_tx_sr_64_c,  NULL, celt_tx_bridge_map_64 };
-static const struct OpusTXContext celt_tx_mdct_256_c  = {  256, 1, celt_tx_mdct_map_256,  NULL,  NULL, &celt_tx_sr_128_c, NULL, celt_tx_bridge_map_128 };
-static const struct OpusTXContext celt_tx_mdct_512_c  = {  512, 1, celt_tx_mdct_map_512,  NULL,  NULL, &celt_tx_sr_256_c, NULL, celt_tx_bridge_map_256 };
-static const struct OpusTXContext celt_tx_mdct_1024_c = { 1024, 1, celt_tx_mdct_map_1024, NULL, NULL, &celt_tx_sr_512_c, NULL, celt_tx_bridge_map_512 };
+static const struct OpusTXContext celt_tx_mdct_1920_c = { 1920, 1, celt_tx_mdct_map_1920, NULL, NULL, &celt_tx_pfa_960_c, celt_tx_fft_pfa_15xM_ns_c };
 #endif
 
 static const struct OpusTXContext *celt_tx_mdct_kernel_c(int len)
@@ -736,13 +713,6 @@ static const struct OpusTXContext *celt_tx_mdct_kernel_c(int len)
       case  960: return &celt_tx_mdct_960_c;
 #if defined(ENABLE_QEXT)
       case 1920: return &celt_tx_mdct_1920_c;
-#endif
-#if defined(CUSTOM_MODES) && !defined(FIXED_POINT)
-      case   64: return &celt_tx_mdct_64_c;
-      case  128: return &celt_tx_mdct_128_c;
-      case  256: return &celt_tx_mdct_256_c;
-      case  512: return &celt_tx_mdct_512_c;
-      case 1024: return &celt_tx_mdct_1024_c;
 #endif
       default:   return NULL;
    }

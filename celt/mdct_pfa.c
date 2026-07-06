@@ -140,174 +140,73 @@ static void get_pfa_crt_params(int M, int *K3, int *K4);
 
 
 #ifndef FIXED_POINT
-static OPUS_INLINE const float *get_p2_twiddle_table(int N, int *tab_N_out) {
-   if (N <= 32) {
-      *tab_N_out = 32;
-      return celt_tx_tab_32_float;
-   }
-   *tab_N_out = N;
-   if (N == 64) return celt_tx_tab_64_float;
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-   if (N == 128) return celt_tx_tab_128_float;
-   if (N == 256) return celt_tx_tab_256_float;
-   return celt_tx_tab_512_float;
-#else
-   return NULL;
-#endif
-}
-
-static OPUS_INLINE cpx lookup_p2_twiddle_float(const float *tab, int tab_N, int N, int j) {
-   cpx w;
-   int idx = j * (tab_N / N);
-   int quarter = tab_N >> 2;
-   int half = tab_N >> 1;
-   if (idx < quarter) {
-      w.r = tab[idx];
-      w.i = tab[quarter - idx];
-   } else if (idx > quarter) {
-      w.r = -tab[half - idx];
-      w.i = tab[idx - quarter];
-   } else {
-      w.r = 0.0f;
-      w.i = 1.0f;
-   }
-   return w;
-}
-#else /* FIXED_POINT */
-# ifdef ENABLE_QEXT
-static OPUS_INLINE const opus_int32 *get_p2_twiddle_table(int N, int *tab_N_out) {
-   if (N <= 32) {
-      *tab_N_out = 32;
-      return celt_tx_tab_32_fixed32;
-   }
-   *tab_N_out = N;
-   if (N == 64) return celt_tx_tab_64_fixed32;
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-   if (N == 128) return celt_tx_tab_128_fixed32;
-   if (N == 256) return celt_tx_tab_256_fixed32;
-   return celt_tx_tab_512_fixed32;
-#else
-   return NULL;
-#endif
-}
-
-static OPUS_INLINE cpx lookup_p2_twiddle_fixed32(const opus_int32 *tab, int tab_N, int N, int j) {
-   cpx w;
-   int idx = j * (tab_N / N);
-   int quarter = tab_N >> 2;
-   int half = tab_N >> 1;
-   if (idx < quarter) {
-      w.r = tab[idx];
-      w.i = tab[quarter - idx];
-   } else if (idx > quarter) {
-      w.r = -tab[half - idx];
-      w.i = tab[idx - quarter];
-   } else {
-      w.r = 0;
-      w.i = Q31ONE;
-   }
-   return w;
-}
-# else /* !ENABLE_QEXT */
-static OPUS_INLINE const opus_int16 *get_p2_twiddle_table(int N, int *tab_N_out) {
-   if (N <= 32) {
-      *tab_N_out = 32;
-      return celt_tx_tab_32_fixed16;
-   }
-   *tab_N_out = N;
-   if (N == 64) return celt_tx_tab_64_fixed16;
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-   if (N == 128) return celt_tx_tab_128_fixed16;
-   if (N == 256) return celt_tx_tab_256_fixed16;
-   return celt_tx_tab_512_fixed16;
-#else
-   return NULL;
-#endif
-}
-
-static OPUS_INLINE cpx lookup_p2_twiddle_fixed16(const opus_int16 *tab, int tab_N, int N, int j) {
-   cpx w;
-   int idx = j * (tab_N / N);
-   int quarter = tab_N >> 2;
-   int half = tab_N >> 1;
-   if (idx < quarter) {
-      w.r = tab[idx];
-      w.i = tab[quarter - idx];
-   } else if (idx > quarter) {
-      w.r = -tab[half - idx];
-      w.i = tab[idx - quarter];
-   } else {
-      w.r = 0;
-      w.i = Q15ONE;
-   }
-   return w;
-}
-# endif
-#endif
-
-static OPUS_INLINE cpx get_p2_twiddle(int N, int j) {
-   int tab_N;
-#ifndef FIXED_POINT
-   const float *tab = get_p2_twiddle_table(N, &tab_N);
-   return lookup_p2_twiddle_float(tab, tab_N, N, j);
+#define celt_tx_tab_32 celt_tx_tab_32_float
+#define celt_tx_tab_64 celt_tx_tab_64_float
+#define celt_tx_tab_128 celt_tx_tab_128_float
+#define celt_tx_tab_256 celt_tx_tab_256_float
+#define celt_tx_tab_512 celt_tx_tab_512_float
 #else
 # ifdef ENABLE_QEXT
-   const opus_int32 *tab = get_p2_twiddle_table(N, &tab_N);
-   return lookup_p2_twiddle_fixed32(tab, tab_N, N, j);
+#define celt_tx_tab_32 celt_tx_tab_32_fixed32
+#define celt_tx_tab_64 celt_tx_tab_64_fixed32
+#define celt_tx_tab_128 celt_tx_tab_128_fixed32
+#define celt_tx_tab_256 celt_tx_tab_256_fixed32
+#define celt_tx_tab_512 celt_tx_tab_512_fixed32
 # else
-   const opus_int16 *tab = get_p2_twiddle_table(N, &tab_N);
-   return lookup_p2_twiddle_fixed16(tab, tab_N, N, j);
+#define celt_tx_tab_32 celt_tx_tab_32_fixed16
+#define celt_tx_tab_64 celt_tx_tab_64_fixed16
+#define celt_tx_tab_128 celt_tx_tab_128_fixed16
+#define celt_tx_tab_256 celt_tx_tab_256_fixed16
+#define celt_tx_tab_512 celt_tx_tab_512_fixed16
 # endif
 #endif
-}
 
-#ifndef FIXED_POINT
-#define BF(x, y, a, b)  \
-    do {                \
-        x = (a) - (b);  \
-        y = (a) + (b);  \
+#define BF(x, y, a, b) \
+    do { \
+        x = SUB32_ovflw(a, b); \
+        y = ADD32_ovflw(a, b); \
     } while (0)
 
-#define CMUL(dre, dim, are, aim, bre, bim)      \
-    do {                                        \
-        (dre) = (are) * (bre) - (aim) * (bim);  \
-        (dim) = (are) * (bim) + (aim) * (bre);  \
+#define CMUL(dre, dim, are, aim, bre, bim) \
+    do { \
+        (dre) = SUB32_ovflw(S_MUL(are, bre), S_MUL(aim, bim)); \
+        (dim) = ADD32_ovflw(S_MUL(are, bim), S_MUL(aim, bre)); \
     } while (0)
 
-#define SMUL(dre, dim, are, aim, bre, bim)      \
-    do {                                        \
-        (dre) = (are) * (bre) - (aim) * (bim);  \
-        (dim) = (are) * (bim) - (aim) * (bre);  \
+#define CMUL_CONJ(dre, dim, are, aim, bre, bim) \
+    do { \
+        (dre) = ADD32_ovflw(S_MUL(are, bre), S_MUL(aim, bim)); \
+        (dim) = SUB32_ovflw(S_MUL(aim, bre), S_MUL(are, bim)); \
     } while (0)
 
-#define BUTTERFLIES(a0, a1, a2, a3)            \
-    do {                                       \
-        r0=a0.r;                               \
-        i0=a0.i;                               \
-        r1=a1.r;                               \
-        i1=a1.i;                               \
-        BF(t3, t5, t5, t1);                    \
-        BF(a2.r, a0.r, r0, t5);                \
-        BF(a3.i, a1.i, i1, t3);                \
-        BF(t4, t6, t2, t6);                    \
-        BF(a3.r, a1.r, r1, t4);                \
-        BF(a2.i, a0.i, i0, t6);                \
+#define BUTTERFLIES(a0, a1, a2, a3) \
+    do { \
+        r0 = a0.r; \
+        i0 = a0.i; \
+        r1 = a1.r; \
+        i1 = a1.i; \
+        BF(t3, t5, t5, t1); \
+        BF(a2.r, a0.r, r0, t5); \
+        BF(a3.i, a1.i, i1, t3); \
+        BF(t4, t6, t2, t6); \
+        BF(a3.r, a1.r, r1, t4); \
+        BF(a2.i, a0.i, i0, t6); \
     } while (0)
 
-#define TRANSFORM(a0, a1, a2, a3, wre, wim)    \
-    do {                                       \
-        CMUL(t1, t2, a2.r, a2.i, wre, -wim);   \
-        CMUL(t5, t6, a3.r, a3.i, wre,  wim);   \
-        BUTTERFLIES(a0, a1, a2, a3);           \
+#define TRANSFORM(a0, a1, a2, a3, wre, wim) \
+    do { \
+        CMUL_CONJ(t1, t2, a2.r, a2.i, wre, wim); \
+        CMUL(t5, t6, a3.r, a3.i, wre, wim); \
+        BUTTERFLIES(a0, a1, a2, a3); \
     } while (0)
 
-static inline void celt_tx_fft_sr_combine_float(cpx *z, const float *cos, int len)
+static OPUS_INLINE void celt_tx_fft_sr_combine(cpx *z, const kiss_twiddle_scalar *cos, int len)
 {
     int o1 = 2*len;
     int o2 = 4*len;
     int o3 = 6*len;
-    const float *wim = cos + o1 - 7;
-    float t1, t2, t3, t4, t5, t6, r0, i0, r1, i1;
+    const kiss_twiddle_scalar *wim = cos + o1 - 7;
+    kiss_fft_scalar t1, t2, t3, t4, t5, t6, r0, i0, r1, i1;
     int i;
 
     for (i = 0; i < len; i += 4) {
@@ -327,7 +226,7 @@ static inline void celt_tx_fft_sr_combine_float(cpx *z, const float *cos, int le
     }
 }
 
-static void celt_tx_fft2_float(cpx *dst, const cpx *src)
+static OPUS_INLINE void celt_tx_fft2(cpx *dst, const cpx *src)
 {
     cpx tmp;
     BF(tmp.r, dst[0].r, src[0].r, src[1].r);
@@ -335,9 +234,9 @@ static void celt_tx_fft2_float(cpx *dst, const cpx *src)
     dst[1] = tmp;
 }
 
-static void celt_tx_fft4_float(cpx *dst, const cpx *src)
+static OPUS_INLINE void celt_tx_fft4(cpx *dst, const cpx *src)
 {
-    float t1, t2, t3, t4, t5, t6, t7, t8;
+    kiss_fft_scalar t1, t2, t3, t4, t5, t6, t7, t8;
 
     BF(t3, t1, src[0].r, src[1].r);
     BF(t8, t6, src[3].r, src[2].r);
@@ -349,32 +248,36 @@ static void celt_tx_fft4_float(cpx *dst, const cpx *src)
     BF(dst[2].i, dst[0].i, t2, t5);
 }
 
-static void celt_tx_fft8_float(cpx *dst, const cpx *src)
+static OPUS_INLINE void celt_tx_fft8(cpx *dst, const cpx *src)
 {
-    float t1, t2, t3, t4, t5, t6, r0, i0, r1, i1;
-    const float cos = 0.7071067812f; /* cos(pi/4) */
+    kiss_fft_scalar t1, t2, t3, t4, t5, t6, r0, i0, r1, i1;
+    kiss_twiddle_scalar cos = celt_tx_tab_32[4];
 
-    celt_tx_fft4_float(dst, src);
+    celt_tx_fft4(dst, src);
 
-    BF(t1, dst[5].r, src[4].r, -src[5].r);
-    BF(t2, dst[5].i, src[4].i, -src[5].i);
-    BF(t5, dst[7].r, src[6].r, -src[7].r);
-    BF(t6, dst[7].i, src[6].i, -src[7].i);
+    t1 = ADD32_ovflw(src[4].r, src[5].r);
+    dst[5].r = SUB32_ovflw(src[4].r, src[5].r);
+    t2 = ADD32_ovflw(src[4].i, src[5].i);
+    dst[5].i = SUB32_ovflw(src[4].i, src[5].i);
+    t5 = ADD32_ovflw(src[6].r, src[7].r);
+    dst[7].r = SUB32_ovflw(src[6].r, src[7].r);
+    t6 = ADD32_ovflw(src[6].i, src[7].i);
+    dst[7].i = SUB32_ovflw(src[6].i, src[7].i);
 
     BUTTERFLIES(dst[0], dst[2], dst[4], dst[6]);
     TRANSFORM(dst[1], dst[3], dst[5], dst[7], cos, cos);
 }
 
-static void celt_tx_fft16_float(cpx *dst, const cpx *src)
+static OPUS_INLINE void celt_tx_fft16(cpx *dst, const cpx *src)
 {
-    float t1, t2, t3, t4, t5, t6, r0, i0, r1, i1;
-    float cos_16_1 = 0.9238795325f; /* cos(pi/8) */
-    float cos_16_2 = 0.7071067812f; /* cos(2*pi/8) */
-    float cos_16_3 = 0.3826834324f; /* cos(3*pi/8) */
+    kiss_fft_scalar t1, t2, t3, t4, t5, t6, r0, i0, r1, i1;
+    kiss_twiddle_scalar cos_16_1 = celt_tx_tab_32[2];
+    kiss_twiddle_scalar cos_16_2 = celt_tx_tab_32[4];
+    kiss_twiddle_scalar cos_16_3 = celt_tx_tab_32[6];
 
-    celt_tx_fft8_float(dst +  0, src +  0);
-    celt_tx_fft4_float(dst +  8, src +  8);
-    celt_tx_fft4_float(dst + 12, src + 12);
+    celt_tx_fft8(dst +  0, src +  0);
+    celt_tx_fft4(dst +  8, src +  8);
+    celt_tx_fft4(dst + 12, src + 12);
 
     t1 = dst[ 8].r;
     t2 = dst[ 8].i;
@@ -387,140 +290,85 @@ static void celt_tx_fft16_float(cpx *dst, const cpx *src)
     TRANSFORM(dst[ 3], dst[ 7], dst[11], dst[15], cos_16_3, cos_16_1);
 }
 
-static void celt_tx_fft32_float(cpx *dst, const cpx *src)
+static OPUS_INLINE void celt_tx_fft32(cpx *dst, const cpx *src)
 {
-    const float *cos = celt_tx_tab_32_float;
-    celt_tx_fft16_float(dst, src);
-    celt_tx_fft8_float(dst + 16, src + 16);
-    celt_tx_fft8_float(dst + 24, src + 24);
-    celt_tx_fft_sr_combine_float(dst, cos, 4);
+    const kiss_twiddle_scalar *cos = celt_tx_tab_32;
+    celt_tx_fft16(dst, src);
+    celt_tx_fft8(dst + 16, src + 16);
+    celt_tx_fft8(dst + 24, src + 24);
+    celt_tx_fft_sr_combine(dst, cos, 4);
 }
 
-static void celt_tx_fft64_float(cpx *dst, const cpx *src)
+static OPUS_INLINE void celt_tx_fft64(cpx *dst, const cpx *src)
 {
-    const float *cos = celt_tx_tab_64_float;
-    celt_tx_fft32_float(dst, src);
-    celt_tx_fft16_float(dst + 32, src + 32);
-    celt_tx_fft16_float(dst + 48, src + 48);
-    celt_tx_fft_sr_combine_float(dst, cos, 8);
+    const kiss_twiddle_scalar *cos = celt_tx_tab_64;
+    celt_tx_fft32(dst, src);
+    celt_tx_fft16(dst + 32, src + 32);
+    celt_tx_fft16(dst + 48, src + 48);
+    celt_tx_fft_sr_combine(dst, cos, 8);
 }
 
 #if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-static void celt_tx_fft128_float(cpx *dst, const cpx *src)
+static OPUS_INLINE void celt_tx_fft128(cpx *dst, const cpx *src)
 {
-    const float *cos = celt_tx_tab_128_float;
-    celt_tx_fft64_float(dst, src);
-    celt_tx_fft32_float(dst + 64, src + 64);
-    celt_tx_fft32_float(dst + 96, src + 96);
-    celt_tx_fft_sr_combine_float(dst, cos, 16);
+    const kiss_twiddle_scalar *cos = celt_tx_tab_128;
+    celt_tx_fft64(dst, src);
+    celt_tx_fft32(dst + 64, src + 64);
+    celt_tx_fft32(dst + 96, src + 96);
+    celt_tx_fft_sr_combine(dst, cos, 16);
 }
 
-static void celt_tx_fft256_float(cpx *dst, const cpx *src)
+static OPUS_INLINE void celt_tx_fft256(cpx *dst, const cpx *src)
 {
-    const float *cos = celt_tx_tab_256_float;
-    celt_tx_fft128_float(dst, src);
-    celt_tx_fft64_float(dst + 128, src + 128);
-    celt_tx_fft64_float(dst + 192, src + 192);
-    celt_tx_fft_sr_combine_float(dst, cos, 32);
+    const kiss_twiddle_scalar *cos = celt_tx_tab_256;
+    celt_tx_fft128(dst, src);
+    celt_tx_fft64(dst + 128, src + 128);
+    celt_tx_fft64(dst + 192, src + 192);
+    celt_tx_fft_sr_combine(dst, cos, 32);
 }
 
-static void celt_tx_fft512_float(cpx *dst, const cpx *src)
+static OPUS_INLINE void celt_tx_fft512(cpx *dst, const cpx *src)
 {
-    const float *cos = celt_tx_tab_512_float;
-    celt_tx_fft256_float(dst, src);
-    celt_tx_fft128_float(dst + 256, src + 256);
-    celt_tx_fft128_float(dst + 384, src + 384);
-    celt_tx_fft_sr_combine_float(dst, cos, 64);
+    const kiss_twiddle_scalar *cos = celt_tx_tab_512;
+    celt_tx_fft256(dst, src);
+    celt_tx_fft128(dst + 256, src + 256);
+    celt_tx_fft128(dst + 384, src + 384);
+    celt_tx_fft_sr_combine(dst, cos, 64);
 }
 #endif
 
-static void celt_tx_fft_sr_c(cpx *dst, const cpx *src, int N)
+static void celt_tx_fft_sr_c(cpx *dst, const cpx *src, int N ARG_FIXED(int *downshift_ptr))
 {
+#ifdef FIXED_POINT
+   int stages = 0;
+   int i;
+   for (i = N >> 1; i > 0; i >>= 1) stages++;
+   PFA_DOWNSHIFT((cpx*)src, N, downshift_ptr, stages);
+#endif
    switch (N) {
-      case   2: celt_tx_fft2_float(dst, src); break;
-      case   4: celt_tx_fft4_float(dst, src); break;
-      case   8: celt_tx_fft8_float(dst, src); break;
-      case  16: celt_tx_fft16_float(dst, src); break;
-      case  32: celt_tx_fft32_float(dst, src); break;
-      case  64: celt_tx_fft64_float(dst, src); break;
+      case   2: celt_tx_fft2(dst, src); break;
+      case   4: celt_tx_fft4(dst, src); break;
+      case   8: celt_tx_fft8(dst, src); break;
+      case  16: celt_tx_fft16(dst, src); break;
+      case  32: celt_tx_fft32(dst, src); break;
+      case  64: celt_tx_fft64(dst, src); break;
 #if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-      case 128: celt_tx_fft128_float(dst, src); break;
-      case 256: celt_tx_fft256_float(dst, src); break;
-      case 512: celt_tx_fft512_float(dst, src); break;
+      case 128: celt_tx_fft128(dst, src); break;
+      case 256: celt_tx_fft256(dst, src); break;
+      case 512: celt_tx_fft512(dst, src); break;
 #endif
       default: celt_assert2(0, "Unsupported Split-Radix FFT size");
    }
+#ifdef FIXED_POINT
+   PFA_DOWNSHIFT(dst, N, downshift_ptr, *downshift_ptr);
+#endif
 }
 
 #undef BF
 #undef CMUL
-#undef SMUL
+#undef CMUL_CONJ
 #undef BUTTERFLIES
 #undef TRANSFORM
-#endif /* !FIXED_POINT */
-
-#ifdef FIXED_POINT
-static void celt_tx_fft_p2_c(cpx *out, const cpx *in, int N ARG_FIXED(int *downshift_ptr)) {
-   int i, j, len, half_len;
-   int log2N;
-   SAVE_STACK;
-   VARDECL(cpx, buf);
-   ALLOC(buf, N, cpx);
-
-   /* Bit-reversal permutation */
-   log2N = 0;
-   for (i = N >> 1; i > 0; i >>= 1) log2N++;
-
-   for (i = 0; i < N; i++) {
-      int rev = 0;
-      for (j = 0; j < log2N; j++) {
-         if ((i >> j) & 1)
-            rev |= (1 << (log2N - 1 - j));
-      }
-      buf[rev] = in[i];
-   }
-
-   /* Cooley-Tukey butterfly stages using twiddles from cosine tables */
-   /* We use C_MULC to multiply by conjugate twiddles, computing DFT directly */
-   {
-      int tab_N;
-# ifdef ENABLE_QEXT
-      const opus_int32 *tab = get_p2_twiddle_table(N, &tab_N);
-# else
-      const opus_int16 *tab = get_p2_twiddle_table(N, &tab_N);
-# endif
-      for (len = 2; len <= N; len <<= 1) {
-         half_len = len >> 1;
-         PFA_DOWNSHIFT(buf, N, downshift_ptr, 1);
-         for (i = 0; i < N; i += len) {
-            /* j = 0: twiddle (1, 0) -- no multiplication, exact precision */
-            {
-               cpx u = buf[i];
-               cpx v = buf[i + half_len];
-               C_ADD(buf[i], u, v);
-               C_SUB(buf[i + half_len], u, v);
-            }
-            for (j = 1; j < half_len; j++) {
-# ifdef ENABLE_QEXT
-               cpx w = lookup_p2_twiddle_fixed32(tab, tab_N, len, j);
-# else
-               cpx w = lookup_p2_twiddle_fixed16(tab, tab_N, len, j);
-# endif
-               cpx u = buf[i + j];
-               cpx t;
-               C_MULC(t, buf[i + j + half_len], w);
-               C_ADD(buf[i + j], u, t);
-               C_SUB(buf[i + j + half_len], u, t);
-            }
-         }
-      }
-   }
-   PFA_DOWNSHIFT(buf, N, downshift_ptr, *downshift_ptr);
-
-   for (i = 0; i < N; i++) out[i] = buf[i];
-   RESTORE_STACK;
-}
-#endif
 
 /*
  * 15-point Good-Thomas Prime Factor Algorithm (PFA) DFT core.
@@ -642,17 +490,14 @@ static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, 
    }
    PFA_DOWNSHIFT(tmp, len, &downshift, 2);
 
-   for (j = 0; j < 15; j++) {
-#ifdef FIXED_POINT
-      int sub_shift = downshift;
-      celt_tx_fft_p2_c(tmp + j * M, tmp + j * M, M ARG_FIXED(&sub_shift));
-      if (j == 14) downshift = sub_shift;
-#else
    {
       const opus_int16 *perm;
       cpx row_temp[64];
       const cpx *row;
       int k;
+#ifdef FIXED_POINT
+      int sub_shift = downshift;
+#endif
 
       perm = get_sr_perm_table(M);
       for (j = 0; j < 15; j++) {
@@ -666,12 +511,16 @@ static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, 
                row_temp[k] = row[-split_radix_permutation(k, M, 0) & (M - 1)];
             }
          }
-         celt_tx_fft_sr_c(row_temp, row_temp, M);
+#ifdef FIXED_POINT
+         sub_shift = downshift;
+#endif
+         celt_tx_fft_sr_c(row_temp, row_temp, M ARG_FIXED(&sub_shift));
          for (k = 0; k < M; k++) {
             tmp[j * M + k] = row_temp[k];
          }
       }
-   }
+#ifdef FIXED_POINT
+      downshift = sub_shift;
 #endif
    }
 

@@ -31,6 +31,7 @@
 #if defined(OPUS_USE_PFA_MDCT)
 
 #include "mdct.h"
+#include "arm/mdct_arm.h"
 #include "kiss_fft.h"
 #include "_kiss_fft_guts.h"
 #include "stack_alloc.h"
@@ -135,32 +136,12 @@ static OPUS_INLINE int sr_perm_map(int k, int M) {
    return -split_radix_permutation(k, M, 0) & (M - 1);
 }
 
+#ifndef OPUS_ARM_PRESUME_NEON_INTR
 static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, void *in, ptrdiff_t stride ARG_FIXED(int downshift));
+#endif
 static void get_pfa_crt_params(int M, int *K3, int *K4);
 
-
-#ifndef FIXED_POINT
-#define celt_tx_tab_32 celt_tx_tab_32_float
-#define celt_tx_tab_64 celt_tx_tab_64_float
-#define celt_tx_tab_128 celt_tx_tab_128_float
-#define celt_tx_tab_256 celt_tx_tab_256_float
-#define celt_tx_tab_512 celt_tx_tab_512_float
-#else
-# ifdef ENABLE_QEXT
-#define celt_tx_tab_32 celt_tx_tab_32_fixed32
-#define celt_tx_tab_64 celt_tx_tab_64_fixed32
-#define celt_tx_tab_128 celt_tx_tab_128_fixed32
-#define celt_tx_tab_256 celt_tx_tab_256_fixed32
-#define celt_tx_tab_512 celt_tx_tab_512_fixed32
-# else
-#define celt_tx_tab_32 celt_tx_tab_32_fixed16
-#define celt_tx_tab_64 celt_tx_tab_64_fixed16
-#define celt_tx_tab_128 celt_tx_tab_128_fixed16
-#define celt_tx_tab_256 celt_tx_tab_256_fixed16
-#define celt_tx_tab_512 celt_tx_tab_512_fixed16
-# endif
-#endif
-
+#ifndef OPUS_ARM_PRESUME_NEON_INTR
 #define BF(x, y, a, b) \
     do { \
         x = SUB32_ovflw(a, b); \
@@ -308,7 +289,7 @@ static OPUS_INLINE void celt_tx_fft64(cpx *dst, const cpx *src)
     celt_tx_fft_sr_combine(dst, cos, 8);
 }
 
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
+#if defined(CUSTOM_MODES)
 static OPUS_INLINE void celt_tx_fft128(cpx *dst, const cpx *src)
 {
     const kiss_twiddle_scalar *cos = celt_tx_tab_128;
@@ -352,7 +333,7 @@ static void celt_tx_fft_sr_c(cpx *dst, const cpx *src, int N ARG_FIXED(int *down
       case  16: celt_tx_fft16(dst, src); break;
       case  32: celt_tx_fft32(dst, src); break;
       case  64: celt_tx_fft64(dst, src); break;
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
+#if defined(CUSTOM_MODES)
       case 128: celt_tx_fft128(dst, src); break;
       case 256: celt_tx_fft256(dst, src); break;
       case 512: celt_tx_fft512(dst, src); break;
@@ -566,6 +547,7 @@ static const struct OpusTXContext *celt_tx_mdct_kernel_c(int len)
       default:   return NULL;
    }
 }
+#endif
 
 #if defined(OPUS_USE_PFA_MDCT)
 static void get_pfa_crt_params(int M, int *K3, int *K4)
@@ -586,8 +568,13 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
    int nfft = st->nfft;
    int M = nfft / 15;
    int K3, K4;
+#if defined(OPUS_ARM_PRESUME_NEON_INTR)
+   const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel(2 * nfft);
+   const struct OpusTXContext *tpl = mdct_tpl ? mdct_tpl->sub : NULL;
+#else
    const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel_c(2 * nfft);
    const struct OpusTXContext *tpl = (mdct_tpl && mdct_tpl->fn == celt_tx_fft_pfa_15xM_ns_c) ? mdct_tpl->sub : NULL;
+#endif
    struct OpusTXContext pfa;
    VARDECL(cpx, tmp);
    VARDECL(cpx, in_perm);
@@ -629,7 +616,18 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
    pfa = *tpl;
    pfa.tmp = tmp;
 
+#if defined(OPUS_ARM_PRESUME_NEON_INTR)
+   mdct_tpl->fn(&pfa, fout, in_perm, sizeof(kiss_fft_cpx) ARG_FIXED(downshift));
+   /* Time-reverse the output from index 1 to N-1 to obtain forward DFT
+      because the Neon assembly computes Inverse DFT by default */
+   for (i = 1; i < (nfft + 1) / 2; i++) {
+      cpx t = fout[i];
+      fout[i] = fout[nfft - i];
+      fout[nfft - i] = t;
+   }
+#else
    celt_tx_fft_pfa_15xM_ns_c(&pfa, fout, in_perm, 1 ARG_FIXED(downshift));
+#endif
 
    RESTORE_STACK;
 }
@@ -640,8 +638,13 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
    int nfft = st->nfft;
    int M = nfft / 15;
    int K3, K4;
+#if defined(OPUS_ARM_PRESUME_NEON_INTR)
+   const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel(2 * nfft);
+   const struct OpusTXContext *tpl = mdct_tpl ? mdct_tpl->sub : NULL;
+#else
    const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel_c(2 * nfft);
    const struct OpusTXContext *tpl = (mdct_tpl && mdct_tpl->fn == celt_tx_fft_pfa_15xM_ns_c) ? mdct_tpl->sub : NULL;
+#endif
    struct OpusTXContext pfa;
    VARDECL(cpx, tmp);
    VARDECL(cpx, in_perm);
@@ -687,6 +690,10 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
 
    pfa = *tpl;
    pfa.tmp = tmp;
+#if defined(OPUS_ARM_PRESUME_NEON_INTR)
+   mdct_tpl->fn(&pfa, fout, in_perm, sizeof(kiss_fft_cpx) ARG_FIXED(fft_shift));
+   /* No time-reversal needed because Neon assembly already computes Inverse DFT */
+#else
    celt_tx_fft_pfa_15xM_ns_c(&pfa, fout, in_perm, 1 ARG_FIXED(fft_shift));
 
    /* 3. Time-reverse the output from index 1 to N-1 to obtain inverse DFT */
@@ -695,6 +702,7 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
       fout[i] = fout[nfft - i];
       fout[nfft - i] = t;
    }
+#endif
 
    RESTORE_STACK;
 }

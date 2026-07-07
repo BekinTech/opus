@@ -100,7 +100,7 @@ extern const opus_int16 celt_tx_p2_map_32[32];
 extern const opus_int16 celt_tx_mdct_map_1920[1920];
 extern const opus_int16 celt_tx_pfa_map_960[960];
 extern const opus_int16 celt_tx_p2_map_64[64];
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
+#if defined(CUSTOM_MODES)
 extern const opus_int16 celt_tx_mdct_map_64[64];
 extern const opus_int16 celt_tx_mdct_map_128[128];
 extern const opus_int16 celt_tx_mdct_map_256[256];
@@ -114,36 +114,14 @@ extern const opus_int16 celt_tx_bridge_map_256[256];
 extern const opus_int16 celt_tx_bridge_map_512[512];
 #endif
 
-#ifndef FIXED_POINT
-extern const float celt_tx_tab_53_float[12];
-extern const float celt_tx_tab_32_float[9];
-extern const float celt_tx_tab_64_float[17];
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-extern const float celt_tx_tab_128_float[33];
-extern const float celt_tx_tab_256_float[65];
-extern const float celt_tx_tab_512_float[129];
+extern const kiss_twiddle_scalar celt_tx_tab_53[12];
+extern const kiss_twiddle_scalar celt_tx_tab_32[9];
+extern const kiss_twiddle_scalar celt_tx_tab_64[17];
+#if defined(CUSTOM_MODES)
+extern const kiss_twiddle_scalar celt_tx_tab_128[33];
+extern const kiss_twiddle_scalar celt_tx_tab_256[65];
+extern const kiss_twiddle_scalar celt_tx_tab_512[129];
 #endif
-#else /* FIXED_POINT */
-# ifdef ENABLE_QEXT
-extern const opus_int32 celt_tx_tab_53_fixed32[12];
-extern const opus_int32 celt_tx_tab_32_fixed32[9];
-extern const opus_int32 celt_tx_tab_64_fixed32[17];
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-extern const opus_int32 celt_tx_tab_128_fixed32[33];
-extern const opus_int32 celt_tx_tab_256_fixed32[65];
-extern const opus_int32 celt_tx_tab_512_fixed32[129];
-#endif
-# else /* !ENABLE_QEXT */
-extern const opus_int16 celt_tx_tab_53_fixed16[12];
-extern const opus_int16 celt_tx_tab_32_fixed16[9];
-extern const opus_int16 celt_tx_tab_64_fixed16[17];
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-extern const opus_int16 celt_tx_tab_128_fixed16[33];
-extern const opus_int16 celt_tx_tab_256_fixed16[65];
-extern const opus_int16 celt_tx_tab_512_fixed16[129];
-#endif
-# endif /* ENABLE_QEXT */
-#endif /* FIXED_POINT */
 #endif /* NEED_CELT_TX_TABLES */
 
 #endif /* CELT_TX_TABLES_H */

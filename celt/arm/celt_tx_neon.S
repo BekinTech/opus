@@ -732,7 +732,7 @@ function celt_tx_fft_pfa_15xM_\name\()_neon, export=1 // LIBOPUS DELTA (P)
         ldr             x4,  [x0, #8]               // in_map, advanced by the loads
 .endif
 
-        movrel          x5, X(celt_tx_tab_53_float)
+        movrel          x5, X(celt_tx_tab_53)
         ld1             { v28.4s, v29.4s, v30.4s }, [x5]
         movrel          x5, tab_15pt
         ld1             { v24.4s }, [x5]
@@ -997,7 +997,7 @@ endfunc celt_tx_mdct_inv_float_neon
 
 .macro SETUP_SR_RECOMB len, re, im, dec
         ldr             w5, =(\len - 4*7)
-        movrel          \re, X(celt_tx_tab_\len\()_float)
+        movrel          \re, X(celt_tx_tab_\len\())
         add             \im, \re, x5
         mov             \dec, #-32
 
@@ -1577,9 +1577,12 @@ function celt_tx_fft_sr_\name\()_neon, export=1 // LIBOPUS DELTA (P)
         stp             q14, q15, [x1, #32*13]
         stp             q22, q23, [x1, #32*15]
 
+#ifdef CUSTOM_MODES
         cmp             w20, #64
         b.gt            128f
+#endif
         ret
+#ifdef CUSTOM_MODES
 128:
         AARCH64_SIGN_LINK_REGISTER
         stp             x20, x30, [sp, #-16]!
@@ -1667,6 +1670,7 @@ function celt_tx_fft_sr_\name\()_neon, export=1 // LIBOPUS DELTA (P)
         ldp             x21, x22, [sp], #16*6
 
         ret
+#endif
 
 2: // special case for 64 point deinterleave
         mov             x10, v23.d[0]

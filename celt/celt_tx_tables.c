@@ -558,7 +558,7 @@ const opus_int16 celt_tx_p2_map_64[64] = {
    8, 56, 16, 32,
 };
 
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
+#if defined(CUSTOM_MODES)
 const opus_int16 celt_tx_mdct_map_64[64] = {
    0, 48, 56, 8, 32, 16, 24, 40, 60, 44, 28, 12,
    4, 52, 36, 20, 62, 46, 54, 6, 30, 14, 22, 38,
@@ -745,24 +745,24 @@ const opus_int16 celt_tx_mdct_map_1024[1024] = {
 
 #ifndef FIXED_POINT
 /* FFT Twiddle Tables (Float) */
-const float celt_tx_tab_53_float[12] = {
+const kiss_twiddle_scalar celt_tx_tab_53[12] = {
    0.309017003f, 0.309017003f, 0.809017003f, 0.809017003f, 0.95105654f, 0.95105654f,
    0.587785244f, 0.587785244f, 0.866025388f, 0.866025388f, 0.5f, -0.5f,
 };
 
-const float celt_tx_tab_32_float[9] = {
+const kiss_twiddle_scalar celt_tx_tab_32[9] = {
    1.0f, 0.980785251f, 0.923879504f, 0.831469595f, 0.707106769f, 0.555570245f,
    0.382683426f, 0.195090324f, 0.0f,
 };
 
-const float celt_tx_tab_64_float[17] = {
+const kiss_twiddle_scalar celt_tx_tab_64[17] = {
    1.0f, 0.99518472f, 0.980785251f, 0.956940353f, 0.923879504f, 0.881921291f,
    0.831469595f, 0.773010433f, 0.707106769f, 0.634393275f, 0.555570245f, 0.471396744f,
    0.382683426f, 0.290284663f, 0.195090324f, 0.0980171412f, 0.0f,
 };
 
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-const float celt_tx_tab_128_float[33] = {
+#if defined(CUSTOM_MODES)
+const kiss_twiddle_scalar celt_tx_tab_128[33] = {
    1.0f, 0.99879545f, 0.99518472f, 0.989176512f, 0.980785251f, 0.970031261f,
    0.956940353f, 0.941544056f, 0.923879504f, 0.903989315f, 0.881921291f, 0.857728601f,
    0.831469595f, 0.803207517f, 0.773010433f, 0.740951121f, 0.707106769f, 0.671558976f,
@@ -771,7 +771,7 @@ const float celt_tx_tab_128_float[33] = {
    0.0980171412f, 0.0490676761f, 0.0f,
 };
 
-const float celt_tx_tab_256_float[65] = {
+const kiss_twiddle_scalar celt_tx_tab_256[65] = {
    1.0f, 0.999698818f, 0.99879545f, 0.997290432f, 0.99518472f, 0.992479563f,
    0.989176512f, 0.985277653f, 0.980785251f, 0.975702107f, 0.970031261f, 0.963776052f,
    0.956940353f, 0.949528158f, 0.941544056f, 0.932992816f, 0.923879504f, 0.914209783f,
@@ -785,7 +785,7 @@ const float celt_tx_tab_256_float[65] = {
    0.0980171412f, 0.0735645667f, 0.0490676761f, 0.024541229f, 0.0f,
 };
 
-const float celt_tx_tab_512_float[129] = {
+const kiss_twiddle_scalar celt_tx_tab_512[129] = {
    1.0f, 0.999924719f, 0.999698818f, 0.999322355f, 0.99879545f, 0.998118103f,
    0.997290432f, 0.996312618f, 0.99518472f, 0.993906975f, 0.992479563f, 0.990902662f,
    0.989176512f, 0.987301409f, 0.985277653f, 0.983105481f, 0.980785251f, 0.97831738f,
@@ -814,24 +814,24 @@ const float celt_tx_tab_512_float[129] = {
 #else /* FIXED_POINT */
 # ifdef ENABLE_QEXT
 /* FFT Twiddle Tables (Fixed32 - Q31) */
-const opus_int32 celt_tx_tab_53_fixed32[12] = {
+const kiss_twiddle_scalar celt_tx_tab_53[12] = {
    663608961L, 663608961L, 1737350785L, 1737350785L, 2042378368L, 2042378368L,
    1262259200L, 1262259200L, 1859775359L, 1859775359L, 1073741824L, -1073741824L,
 };
 
-const opus_int32 celt_tx_tab_32_fixed32[9] = {
+const kiss_twiddle_scalar celt_tx_tab_32[9] = {
    2147483647L, 2106220289L, 1984016128L, 1785567359L, 1518500224L, 1193078016L,
    821806400L, 418953281L, 0L,
 };
 
-const opus_int32 celt_tx_tab_64_fixed32[17] = {
+const kiss_twiddle_scalar celt_tx_tab_64[17] = {
    2147483647L, 2137142913L, 2106220289L, 2055013760L, 1984016128L, 1893911551L,
    1785567359L, 1660027265L, 1518500224L, 1362349184L, 1193078016L, 1012316799L,
    821806400L, 623381567L, 418953281L, 210490208L, 0L,
 };
 
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-const opus_int32 celt_tx_tab_128_fixed32[33] = {
+#if defined(CUSTOM_MODES)
+const kiss_twiddle_scalar celt_tx_tab_128[33] = {
    2147483647L, 2144896897L, 2137142913L, 2124240385L, 2106220289L, 2083126271L,
    2055013760L, 2021950464L, 1984016128L, 1941302272L, 1893911551L, 1841958145L,
    1785567359L, 1724875009L, 1660027265L, 1591180416L, 1518500224L, 1442161920L,
@@ -840,7 +840,7 @@ const opus_int32 celt_tx_tab_128_fixed32[33] = {
    210490208L, 105372032L, 0L,
 };
 
-const opus_int32 celt_tx_tab_256_fixed32[65] = {
+const kiss_twiddle_scalar celt_tx_tab_256[65] = {
    2147483647L, 2146836865L, 2144896897L, 2141664895L, 2137142913L, 2131333633L,
    2124240385L, 2115867649L, 2106220289L, 2095304320L, 2083126271L, 2069693312L,
    2055013760L, 2039096193L, 2021950464L, 2003586816L, 1984016128L, 1963250560L,
@@ -854,7 +854,7 @@ const opus_int32 celt_tx_tab_256_fixed32[65] = {
    210490208L, 157978704L, 105372032L, 52701888L, 0L,
 };
 
-const opus_int32 celt_tx_tab_512_fixed32[129] = {
+const kiss_twiddle_scalar celt_tx_tab_512[129] = {
    2147483647L, 2147321983L, 2146836865L, 2146028416L, 2144896897L, 2143442305L,
    2141664895L, 2139565055L, 2137142913L, 2134398976L, 2131333633L, 2127947263L,
    2124240385L, 2120213631L, 2115867649L, 2111202945L, 2106220289L, 2100920576L,
@@ -882,24 +882,24 @@ const opus_int32 celt_tx_tab_512_fixed32[129] = {
 
 # else /* !ENABLE_QEXT */
 /* FFT Twiddle Tables (Fixed16 - Q15) */
-const opus_int16 celt_tx_tab_53_fixed16[12] = {
+const kiss_twiddle_scalar celt_tx_tab_53[12] = {
    10126, 10126, 26510, 26510, 31164, 31164, 19261, 19261,
    28378, 28378, 16384, -16384,
 };
 
-const opus_int16 celt_tx_tab_32_fixed16[9] = {
+const kiss_twiddle_scalar celt_tx_tab_32[9] = {
    32767, 32138, 30274, 27246, 23170, 18205, 12540, 6393,
    0,
 };
 
-const opus_int16 celt_tx_tab_64_fixed16[17] = {
+const kiss_twiddle_scalar celt_tx_tab_64[17] = {
    32767, 32610, 32138, 31357, 30274, 28899, 27246, 25330,
    23170, 20788, 18205, 15447, 12540, 9512, 6393, 3212,
    0,
 };
 
-#if defined(CUSTOM_MODES) || defined(ENABLE_DRED) || defined(ENABLE_DEEP_PLC)
-const opus_int16 celt_tx_tab_128_fixed16[33] = {
+#if defined(CUSTOM_MODES)
+const kiss_twiddle_scalar celt_tx_tab_128[33] = {
    32767, 32729, 32610, 32413, 32138, 31786, 31357, 30853,
    30274, 29622, 28899, 28106, 27246, 26320, 25330, 24279,
    23170, 22006, 20788, 19520, 18205, 16846, 15447, 14010,
@@ -907,7 +907,7 @@ const opus_int16 celt_tx_tab_128_fixed16[33] = {
    0,
 };
 
-const opus_int16 celt_tx_tab_256_fixed16[65] = {
+const kiss_twiddle_scalar celt_tx_tab_256[65] = {
    32767, 32758, 32729, 32679, 32610, 32522, 32413, 32286,
    32138, 31972, 31786, 31581, 31357, 31114, 30853, 30572,
    30274, 29957, 29622, 29269, 28899, 28511, 28106, 27684,
@@ -919,7 +919,7 @@ const opus_int16 celt_tx_tab_256_fixed16[65] = {
    0,
 };
 
-const opus_int16 celt_tx_tab_512_fixed16[129] = {
+const kiss_twiddle_scalar celt_tx_tab_512[129] = {
    32767, 32766, 32758, 32746, 32729, 32706, 32679, 32647,
    32610, 32568, 32522, 32470, 32413, 32352, 32286, 32214,
    32138, 32058, 31972, 31881, 31786, 31686, 31581, 31471,

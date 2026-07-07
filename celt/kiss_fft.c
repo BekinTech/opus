@@ -46,7 +46,7 @@
 #endif
 
 
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 extern void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *fout ARG_FIXED(int downshift));
 extern void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_cpx *fout ARG_FIXED(int fft_shift));
 #endif
@@ -59,7 +59,7 @@ extern void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, k
    complex numbers.  It also declares the kf_ internal functions.
 */
 
-#if !defined(OPUS_USE_PFA_MDCT) || defined(OPUS_CUSTOM) || defined(ENABLE_DEEP_PLC)
+#if !defined(ENABLE_PFA) || defined(OPUS_CUSTOM) || defined(ENABLE_DEEP_PLC)
 static void kf_bfly2(
                      kiss_fft_cpx * Fout,
                      int m,
@@ -488,7 +488,7 @@ kiss_fft_state *opus_fft_alloc_twiddles(int nfft,void * mem,size_t * lenmem,
 #else
         st->scale = 1.f/nfft;
 #endif
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
         if (nfft == 60 || nfft == 120 || nfft == 240 || nfft == 480 || nfft == 960)
         {
            st->twiddles = NULL;
@@ -552,7 +552,7 @@ void opus_fft_free(const kiss_fft_state *cfg, int arch)
 
 #endif /* CUSTOM_MODES */
 
-#if !defined(OPUS_USE_PFA_MDCT) || defined(OPUS_CUSTOM) || defined(ENABLE_DEEP_PLC)
+#if !defined(ENABLE_PFA) || defined(OPUS_CUSTOM) || defined(ENABLE_DEEP_PLC)
 #ifdef FIXED_POINT
 #ifndef OVERRIDE_fft_downshift
 static void fft_downshift(kiss_fft_cpx *x, int N, int *total, int step) {
@@ -630,12 +630,12 @@ void opus_fft_impl(const kiss_fft_state *st,kiss_fft_cpx *fout ARG_FIXED(int dow
     }
     fft_downshift(fout, st->nfft, &downshift, downshift);
 }
-#endif /* !OPUS_USE_PFA_MDCT || OPUS_CUSTOM || ENABLE_DEEP_PLC */
+#endif /* !ENABLE_PFA || OPUS_CUSTOM || ENABLE_DEEP_PLC */
 #endif
 
 void opus_fft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *fout)
 {
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
    if (st->nfft == 60 || st->nfft == 120 || st->nfft == 240 || st->nfft == 480 || st->nfft == 960)
    {
       int i;
@@ -661,7 +661,7 @@ void opus_fft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *f
 #endif
 #endif
 
-#if !defined(OPUS_USE_PFA_MDCT) || defined(OPUS_CUSTOM) || defined(ENABLE_DEEP_PLC)
+#if !defined(ENABLE_PFA) || defined(OPUS_CUSTOM) || defined(ENABLE_DEEP_PLC)
    int i;
    celt_coef scale;
 #ifdef FIXED_POINT
@@ -686,7 +686,7 @@ void opus_fft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *f
 
 void opus_ifft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *fout)
 {
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
    if (st->nfft == 60 || st->nfft == 120 || st->nfft == 240 || st->nfft == 480 || st->nfft == 960)
    {
       opus_ifft_pfa_c(st, fin, fout ARG_FIXED(0));
@@ -697,7 +697,7 @@ void opus_ifft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *
 #endif
 #endif
 
-#if !defined(OPUS_USE_PFA_MDCT) || defined(OPUS_CUSTOM) || defined(ENABLE_DEEP_PLC)
+#if !defined(ENABLE_PFA) || defined(OPUS_CUSTOM) || defined(ENABLE_DEEP_PLC)
    int i;
    celt_assert2 (fin != fout, "In-place FFT not supported");
    /* Bit-reverse the input */

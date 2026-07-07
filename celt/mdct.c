@@ -229,7 +229,7 @@ void clt_mdct_forward_c(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_scal
 #ifdef FIXED_POINT
          maxval = MAX32(maxval, MAX32(ABS32(yc.r), ABS32(yc.i)));
 #endif
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
          f2[i] = yc;
 #else
          f2[st->bitrev[i]] = yc;
@@ -241,7 +241,7 @@ void clt_mdct_forward_c(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_scal
    }
 
    /* N/4 complex FFT, does not downscale anymore */
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
    opus_fft_pfa_c(st, f2, f2 ARG_FIXED(scale_shift-headroom));
 #else
    opus_fft_impl(st, f2 ARG_FIXED(scale_shift-headroom));
@@ -326,7 +326,7 @@ void clt_mdct_backward_c(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_sca
       const opus_int16 * OPUS_RESTRICT bitrev = l->kfft[shift]->bitrev;
       for(i=0;i<N4;i++)
       {
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
          kiss_fft_scalar yr, yi;
          opus_val32 x1, x2;
          x1 = SHL32_ovflw(*xp1, pre_shift);
@@ -355,7 +355,7 @@ void clt_mdct_backward_c(const mdct_lookup *l, kiss_fft_scalar *in, kiss_fft_sca
       }
    }
 
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
    opus_fft_pfa_c(l->kfft[shift], (kiss_fft_cpx*)(out+(overlap>>1)), (kiss_fft_cpx*)(out+(overlap>>1)) ARG_FIXED(fft_shift));
 #else
    opus_fft_impl(l->kfft[shift], (kiss_fft_cpx*)(out+(overlap>>1)) ARG_FIXED(fft_shift));

@@ -76,7 +76,7 @@
 #endif
 
 /* Tables are needed if either C PFA is enabled or ARM Neon TX MDCT is enabled */
-#if defined(OPUS_USE_PFA_MDCT) || defined(OPUS_ARM_TX_MDCT)
+#if defined(ENABLE_PFA) || defined(OPUS_ARM_TX_MDCT)
 #define NEED_CELT_TX_TABLES (1)
 #endif
 

@@ -124,7 +124,7 @@ static const unsigned char qext_cache_caps50[112] = {
 
 #ifndef FFT_TWIDDLES48000_960
 #define FFT_TWIDDLES48000_960
-#if !defined(OPUS_USE_PFA_MDCT)
+#if !defined(ENABLE_PFA)
 static const kiss_twiddle_cpx fft_twiddles48000_960[480] = {
 {1.0000000f, -0.0000000f}, {0.99991433f, -0.013089596f},
 {0.99965732f, -0.026176948f}, {0.99922904f, -0.039259816f},
@@ -367,9 +367,9 @@ static const kiss_twiddle_cpx fft_twiddles48000_960[480] = {
 {0.99862953f, 0.052335956f}, {0.99922904f, 0.039259816f},
 {0.99965732f, 0.026176948f}, {0.99991433f, 0.013089596f},
 };
-#endif /* !OPUS_USE_PFA_MDCT */
+#endif /* !ENABLE_PFA */
 #endif
-#if !defined(OPUS_USE_PFA_MDCT)
+#if !defined(ENABLE_PFA)
 #ifndef FFT_BITREV480
 #define FFT_BITREV480
 static const opus_int16 fft_bitrev480[480] = {
@@ -453,7 +453,7 @@ static const opus_int16 fft_bitrev60[60] = {
 3, 15, 27, 39, 51, 7, 19, 31, 43, 55, 11, 23, 35, 47, 59,
 };
 #endif
-#endif /* !OPUS_USE_PFA_MDCT */
+#endif /* !ENABLE_PFA */
 
 #ifndef FFT_STATE48000_960_0
 #define FFT_STATE48000_960_0
@@ -462,12 +462,12 @@ static const kiss_fft_state fft_state48000_960_0 = {
 0.0020833334f,    /* scale */
 -1,    /* shift */
 {5, 96, 3, 32, 4, 8, 2, 4, 4, 1, 0, 0, 0, 0, 0, 0, },    /* factors */
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* bitrev */
 #else
 fft_bitrev480,    /* bitrev */
 #endif
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* twiddles */
 #else
 fft_twiddles48000_960,    /* twiddles */
@@ -487,12 +487,12 @@ static const kiss_fft_state fft_state48000_960_1 = {
 0.0041666669f,    /* scale */
 1,    /* shift */
 {5, 48, 3, 16, 4, 4, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, },    /* factors */
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* bitrev */
 #else
 fft_bitrev240,    /* bitrev */
 #endif
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* twiddles */
 #else
 fft_twiddles48000_960,    /* twiddles */
@@ -512,12 +512,12 @@ static const kiss_fft_state fft_state48000_960_2 = {
 0.0083333338f,    /* scale */
 2,    /* shift */
 {5, 24, 3, 8, 2, 4, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, },    /* factors */
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* bitrev */
 #else
 fft_bitrev120,    /* bitrev */
 #endif
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* twiddles */
 #else
 fft_twiddles48000_960,    /* twiddles */
@@ -537,12 +537,12 @@ static const kiss_fft_state fft_state48000_960_3 = {
 0.016666668f,    /* scale */
 3,    /* shift */
 {5, 12, 3, 4, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },    /* factors */
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* bitrev */
 #else
 fft_bitrev60,    /* bitrev */
 #endif
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* twiddles */
 #else
 fft_twiddles48000_960,    /* twiddles */
@@ -1087,7 +1087,7 @@ static const unsigned char qext_cache_caps50[112] = {
 
 #ifndef FFT_TWIDDLES96000_1920
 #define FFT_TWIDDLES96000_1920
-#if !defined(OPUS_USE_PFA_MDCT)
+#if !defined(ENABLE_PFA)
 static const kiss_twiddle_cpx fft_twiddles96000_1920[960] = {
 {1.0000000f, -0.0000000f}, {0.99997858f, -0.0065449380f},
 {0.99991433f, -0.013089596f}, {0.99980724f, -0.019633692f},
@@ -1570,9 +1570,9 @@ static const kiss_twiddle_cpx fft_twiddles96000_1920[960] = {
 {0.99965732f, 0.026176948f}, {0.99980724f, 0.019633692f},
 {0.99991433f, 0.013089596f}, {0.99997858f, 0.0065449380f},
 };
-#endif /* !OPUS_USE_PFA_MDCT */
+#endif /* !ENABLE_PFA */
 #endif
-#if !defined(OPUS_USE_PFA_MDCT)
+#if !defined(ENABLE_PFA)
 #ifndef FFT_BITREV960
 #define FFT_BITREV960
 static const opus_int16 fft_bitrev960[960] = {
@@ -1716,7 +1716,7 @@ static const opus_int16 fft_bitrev120[120] = {
 7, 31, 55, 79, 103, 15, 39, 63, 87, 111, 23, 47, 71, 95, 119,
 };
 #endif
-#endif /* !OPUS_USE_PFA_MDCT */
+#endif /* !ENABLE_PFA */
 
 #ifndef FFT_STATE96000_1920_0
 #define FFT_STATE96000_1920_0
@@ -1725,12 +1725,12 @@ static const kiss_fft_state fft_state96000_1920_0 = {
 0.0010416667f,    /* scale */
 -1,    /* shift */
 {5, 192, 3, 64, 4, 16, 4, 4, 4, 1, 0, 0, 0, 0, 0, 0, },    /* factors */
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* bitrev */
 #else
 fft_bitrev960,    /* bitrev */
 #endif
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* twiddles */
 #else
 fft_twiddles96000_1920,    /* twiddles */
@@ -1750,12 +1750,12 @@ static const kiss_fft_state fft_state96000_1920_1 = {
 0.0020833334f,    /* scale */
 1,    /* shift */
 {5, 96, 3, 32, 4, 8, 2, 4, 4, 1, 0, 0, 0, 0, 0, 0, },    /* factors */
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* bitrev */
 #else
 fft_bitrev480,    /* bitrev */
 #endif
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* twiddles */
 #else
 fft_twiddles96000_1920,    /* twiddles */
@@ -1775,12 +1775,12 @@ static const kiss_fft_state fft_state96000_1920_2 = {
 0.0041666669f,    /* scale */
 2,    /* shift */
 {5, 48, 3, 16, 4, 4, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, },    /* factors */
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* bitrev */
 #else
 fft_bitrev240,    /* bitrev */
 #endif
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* twiddles */
 #else
 fft_twiddles96000_1920,    /* twiddles */
@@ -1800,12 +1800,12 @@ static const kiss_fft_state fft_state96000_1920_3 = {
 0.0083333338f,    /* scale */
 3,    /* shift */
 {5, 24, 3, 8, 2, 4, 4, 1, 0, 0, 0, 0, 0, 0, 0, 0, },    /* factors */
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* bitrev */
 #else
 fft_bitrev120,    /* bitrev */
 #endif
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 NULL,    /* twiddles */
 #else
 fft_twiddles96000_1920,    /* twiddles */

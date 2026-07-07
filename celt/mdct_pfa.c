@@ -28,7 +28,7 @@
 #include "config.h"
 #endif
 
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 
 #include "mdct.h"
 #include "arm/mdct_arm.h"
@@ -549,7 +549,7 @@ static const struct OpusTXContext *celt_tx_mdct_kernel_c(int len)
 }
 #endif
 
-#if defined(OPUS_USE_PFA_MDCT)
+#if defined(ENABLE_PFA)
 static void get_pfa_crt_params(int M, int *K3, int *K4)
 {
    switch (M) {
@@ -580,7 +580,7 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
    VARDECL(cpx, in_perm);
    SAVE_STACK;
 
-#if !defined(OPUS_USE_PFA_MDCT) || defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API) || defined(ENABLE_DEEP_PLC)
+#if !defined(ENABLE_PFA) || defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API) || defined(ENABLE_DEEP_PLC)
    if (tpl == NULL) {
       if (fin == fout) {
          VARDECL(kiss_fft_cpx, tmp_perm);
@@ -650,7 +650,7 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
    VARDECL(cpx, in_perm);
    SAVE_STACK;
 
-#if !defined(OPUS_USE_PFA_MDCT) || defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API) || defined(ENABLE_DEEP_PLC)
+#if !defined(ENABLE_PFA) || defined(CUSTOM_MODES) || defined(ENABLE_OPUS_CUSTOM_API) || defined(ENABLE_DEEP_PLC)
    if (tpl == NULL) {
       if (fin == fout) {
          VARDECL(kiss_fft_cpx, tmp_perm);
@@ -708,4 +708,4 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
 }
 #endif
 
-#endif /* OPUS_USE_PFA_MDCT */
+#endif /* ENABLE_PFA */

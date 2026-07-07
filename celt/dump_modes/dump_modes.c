@@ -181,7 +181,7 @@ void dump_modes(FILE *file, CELTMode **modes, int nb_modes)
       /* FFT twiddles */
       fprintf(file, "#ifndef FFT_TWIDDLES%d_%d\n", mode->Fs, mdctSize);
       fprintf(file, "#define FFT_TWIDDLES%d_%d\n", mode->Fs, mdctSize);
-      fprintf(file, "#if !defined(OPUS_USE_PFA_MDCT)\n");
+      fprintf(file, "#if !defined(ENABLE_PFA)\n");
 
       fprintf (file, "static const kiss_twiddle_cpx fft_twiddles%d_%d[%d] = {\n",
             mode->Fs, mdctSize, mode->mdct.kfft[0]->nfft);
@@ -198,14 +198,14 @@ void dump_modes(FILE *file, CELTMode **modes, int nb_modes)
          fprintf (file, "{" WORD16 ", " WORD16 "},%c", mode->mdct.kfft[0]->twiddles[j].r, mode->mdct.kfft[0]->twiddles[j].i,(j+3)%2==0?'\n':' ');
 #endif
       fprintf (file, "};\n");
-      fprintf (file, "#endif /* !OPUS_USE_PFA_MDCT */\n");
+      fprintf (file, "#endif /* !ENABLE_PFA */\n");
       fprintf (file, "#endif\n");
 
 #ifdef OVERRIDE_FFT
       dump_mode_arch(mode);
 #endif
       /* FFT Bitrev tables */
-      fprintf(file, "#if !defined(OPUS_USE_PFA_MDCT)\n");
+      fprintf(file, "#if !defined(ENABLE_PFA)\n");
       for (k=0;k<=mode->mdct.maxshift;k++)
       {
          fprintf(file, "#ifndef FFT_BITREV%d\n", mode->mdct.kfft[k]->nfft);
@@ -219,7 +219,7 @@ void dump_modes(FILE *file, CELTMode **modes, int nb_modes)
          fprintf(file, "#endif\n");
          fprintf(file, "\n");
       }
-      fprintf(file, "#endif /* !OPUS_USE_PFA_MDCT */\n\n");
+      fprintf(file, "#endif /* !ENABLE_PFA */\n\n");
 
       /* FFT States */
       for (k=0;k<=mode->mdct.maxshift;k++)
@@ -247,12 +247,12 @@ void dump_modes(FILE *file, CELTMode **modes, int nb_modes)
          for (j=0;j<2*MAXFACTORS;j++)
             fprintf (file, "%d, ", mode->mdct.kfft[k]->factors[j]);
          fprintf (file, "},    /* factors */\n");
-         fprintf (file, "#if defined(OPUS_USE_PFA_MDCT)\n");
+         fprintf (file, "#if defined(ENABLE_PFA)\n");
          fprintf (file, "NULL,    /* bitrev */\n");
          fprintf (file, "#else\n");
          fprintf (file, "fft_bitrev%d,    /* bitrev */\n", mode->mdct.kfft[k]->nfft);
          fprintf (file, "#endif\n");
-         fprintf (file, "#if defined(OPUS_USE_PFA_MDCT)\n");
+         fprintf (file, "#if defined(ENABLE_PFA)\n");
          fprintf (file, "NULL,    /* twiddles */\n");
          fprintf (file, "#else\n");
          fprintf (file, "fft_twiddles%d_%d,    /* twiddles */\n", mode->Fs, mdctSize);

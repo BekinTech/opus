@@ -379,7 +379,7 @@ static void winograd_fft3(const cpx *in, cpx *out) {
    out[2].i = ADD32_ovflw(SUB32_ovflw(in[0].i, t2_i), t1_i);
 }
 
-static void decl_fft5(const cpx *in, int r3, cpx *out, int stride) {
+static OPUS_INLINE void decl_fft5(const cpx *in, int r3, cpx *out, int stride) {
    cpx dc = in[0];
    kiss_fft_scalar r_sum14, r_diff14, i_sum14, i_diff14;
    kiss_fft_scalar r_sum23, r_diff23, i_sum23, i_diff23;
@@ -432,20 +432,53 @@ static void decl_fft5(const cpx *in, int r3, cpx *out, int stride) {
 
 static void celt_tx_fft15_c(const cpx *in, cpx *out, int stride) {
    cpx tmp[15];
-   int c5, r3;
+   cpx in_col[3];
+   cpx out_col[3];
 
-   for (c5 = 0; c5 < 5; c5++) {
-      cpx in_col[3];
-      cpx out_col[3];
-      for (r3 = 0; r3 < 3; r3++) {
-         int r_pfa = celt_tx_pfa_P[(10 * r3 + 6 * c5) % 15];
-         in_col[r3] = in[r_pfa];
-      }
-      winograd_fft3(in_col, out_col);
-      tmp[c5] = out_col[0];
-      tmp[c5 + 5] = out_col[1];
-      tmp[c5 + 10] = out_col[2];
-   }
+   /* c5 = 0 */
+   in_col[0] = in[celt_tx_pfa_P[0]];
+   in_col[1] = in[celt_tx_pfa_P[10]];
+   in_col[2] = in[celt_tx_pfa_P[5]];
+   winograd_fft3(in_col, out_col);
+   tmp[0] = out_col[0];
+   tmp[5] = out_col[1];
+   tmp[10] = out_col[2];
+
+   /* c5 = 1 */
+   in_col[0] = in[celt_tx_pfa_P[6]];
+   in_col[1] = in[celt_tx_pfa_P[1]];
+   in_col[2] = in[celt_tx_pfa_P[11]];
+   winograd_fft3(in_col, out_col);
+   tmp[1] = out_col[0];
+   tmp[6] = out_col[1];
+   tmp[11] = out_col[2];
+
+   /* c5 = 2 */
+   in_col[0] = in[celt_tx_pfa_P[12]];
+   in_col[1] = in[celt_tx_pfa_P[7]];
+   in_col[2] = in[celt_tx_pfa_P[2]];
+   winograd_fft3(in_col, out_col);
+   tmp[2] = out_col[0];
+   tmp[7] = out_col[1];
+   tmp[12] = out_col[2];
+
+   /* c5 = 3 */
+   in_col[0] = in[celt_tx_pfa_P[3]];
+   in_col[1] = in[celt_tx_pfa_P[13]];
+   in_col[2] = in[celt_tx_pfa_P[8]];
+   winograd_fft3(in_col, out_col);
+   tmp[3] = out_col[0];
+   tmp[8] = out_col[1];
+   tmp[13] = out_col[2];
+
+   /* c5 = 4 */
+   in_col[0] = in[celt_tx_pfa_P[9]];
+   in_col[1] = in[celt_tx_pfa_P[4]];
+   in_col[2] = in[celt_tx_pfa_P[14]];
+   winograd_fft3(in_col, out_col);
+   tmp[4] = out_col[0];
+   tmp[9] = out_col[1];
+   tmp[14] = out_col[2];
 
    decl_fft5(tmp, 0, out, stride);
    decl_fft5(tmp + 5, 1, out, stride);
@@ -467,38 +500,21 @@ static void celt_tx_fft_pfa_15xM_ns_c(const struct OpusTXContext *s, void *out, 
 
    PFA_DOWNSHIFT((cpx*)in, len, &downshift, 3);
    for (i = 0; i < M; i++) {
-      celt_tx_fft15_c(in_cpx + 15 * i, tmp + i, M);
+      int src_col = sr_perm_map(i, M);
+      celt_tx_fft15_c(in_cpx + 15 * src_col, tmp + i, M);
    }
    PFA_DOWNSHIFT(tmp, len, &downshift, 2);
 
    {
-      const opus_int16 *perm;
-      cpx row_temp[64];
-      const cpx *row;
-      int k;
 #ifdef FIXED_POINT
       int sub_shift = downshift;
 #endif
-
-      perm = get_sr_perm_table(M);
       for (j = 0; j < 15; j++) {
-         row = tmp + j * M;
-         if (perm != NULL) {
-            for (k = 0; k < M; k++) {
-               row_temp[k] = row[perm[k]];
-            }
-         } else {
-            for (k = 0; k < M; k++) {
-               row_temp[k] = row[-split_radix_permutation(k, M, 0) & (M - 1)];
-            }
-         }
+         cpx *row = tmp + j * M;
 #ifdef FIXED_POINT
          sub_shift = downshift;
 #endif
-         celt_tx_fft_sr_c(row_temp, row_temp, M ARG_FIXED(&sub_shift));
-         for (k = 0; k < M; k++) {
-            tmp[j * M + k] = row_temp[k];
-         }
+         celt_tx_fft_sr_c(row, row, M ARG_FIXED(&sub_shift));
       }
 #ifdef FIXED_POINT
       downshift = sub_shift;
@@ -568,6 +584,7 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
    int nfft = st->nfft;
    int M = nfft / 15;
    int K3, K4;
+   int idx_r, idx_c;
 #if defined(OPUS_ARM_PRESUME_NEON_INTR)
    const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel(2 * nfft);
    const struct OpusTXContext *tpl = mdct_tpl ? mdct_tpl->sub : NULL;
@@ -606,11 +623,17 @@ void opus_fft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft_
 
    get_pfa_crt_params(M, &K3, &K4);
 
+   idx_r = 0;
+   idx_c = 0;
    for (i = 0; i < nfft; i++) {
-      int r = celt_tx_pfa_P[(i * K4) % 15];
-      int c = (i * K3) % M;
+      int r = celt_tx_pfa_P[idx_r];
+      int c = idx_c;
       int dest = r + c * 15;
       in_perm[dest] = fin[i];
+      idx_r += K4;
+      if (idx_r >= 15) idx_r -= 15;
+      idx_c += K3;
+      if (idx_c >= M) idx_c -= M;
    }
 
    pfa = *tpl;
@@ -638,6 +661,7 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
    int nfft = st->nfft;
    int M = nfft / 15;
    int K3, K4;
+   int idx_r, idx_c;
 #if defined(OPUS_ARM_PRESUME_NEON_INTR)
    const struct OpusTXContext *mdct_tpl = celt_tx_mdct_kernel(2 * nfft);
    const struct OpusTXContext *tpl = mdct_tpl ? mdct_tpl->sub : NULL;
@@ -681,11 +705,17 @@ void opus_ifft_pfa_c(const kiss_fft_state *st, const kiss_fft_cpx *fin, kiss_fft
    get_pfa_crt_params(M, &K3, &K4);
 
    /* 1. Permute input to grid order (IDFT input is pre-scaled by caller) */
+   idx_r = 0;
+   idx_c = 0;
    for (i = 0; i < nfft; i++) {
-      int r = celt_tx_pfa_P[(i * K4) % 15];
-      int c = (i * K3) % M;
+      int r = celt_tx_pfa_P[idx_r];
+      int c = idx_c;
       int dest = r + c * 15;
       in_perm[dest] = fin[i];
+      idx_r += K4;
+      if (idx_r >= 15) idx_r -= 15;
+      idx_c += K3;
+      if (idx_c >= M) idx_c -= M;
    }
 
    pfa = *tpl;
